@@ -90,6 +90,7 @@ export const productType = defineType({
           { title: "Others", value: "others" },
           { title: "Parche", value: "patch"},
           {title: "Gorras", value: "cap"},
+          {title: "Tazas", value: "mug"}
         ],
       },
     }),

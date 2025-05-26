@@ -15,6 +15,7 @@ export const productType = [
   { title: "Pines", value: "pin" },
   {title: "Parches", value: "patch"},
   {title: "Gorras", value: "cap"},
+  {title: "Tazas", value: "mug"},
 ];
 
 export const quickLinksData = [
