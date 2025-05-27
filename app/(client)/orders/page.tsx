@@ -45,7 +45,7 @@ const OrdersPage = async () => {
                       <TableHead>Total</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead className="hidden sm:table-cell">
-                        Invoice Number
+                        Numero de Orden
                       </TableHead>
                       <TableHead>Action</TableHead>
                     </TableRow>
