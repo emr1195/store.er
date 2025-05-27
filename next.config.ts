@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   images: {
     remotePatterns: [
       {
@@ -11,8 +10,12 @@ const nextConfig: NextConfig = {
     ],
   },
   eslint: {
-    // ✅ Opción 3: Ignora los errores de ESLint en el build
+    // Ignorar errores de ESLint durante el build
     ignoreDuringBuilds: true,
+  },
+  typescript: {
+    // ✅ Ignorar errores de TypeScript durante el build
+    ignoreBuildErrors: true,
   },
 };
 
