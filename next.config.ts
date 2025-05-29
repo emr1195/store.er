@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
+const isProd = process.env.NODE_ENV === "production";
+
 const nextConfig: NextConfig = {
+  output: "export", // <--- esto habilita next export
   images: {
+    unoptimized: true, // necesario para next export si usas imágenes
     remotePatterns: [
       {
         protocol: "https",
@@ -9,12 +13,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  basePath: isProd ? "/store.er" : "",
+  assetPrefix: isProd ? "/store.er/" : "",
   eslint: {
-    // Ignorar errores de ESLint durante el build
     ignoreDuringBuilds: true,
   },
   typescript: {
-    // ✅ Ignorar errores de TypeScript durante el build
     ignoreBuildErrors: true,
   },
 };
