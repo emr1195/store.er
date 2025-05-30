@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const isProd = process.env.NODE_ENV === "production";
 
 const nextConfig: NextConfig = {
-  output: "export", // <--- esto habilita next export
+  
   images: {
     unoptimized: true, // necesario para next export si usas imágenes
     remotePatterns: [
