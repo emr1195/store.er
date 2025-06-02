@@ -29,17 +29,6 @@ export default async function RootLayout({
       <Header />
       {children}
       <Footer />
-      <Toaster
-        position="bottom-right"
-        toastOptions={{
-          style: {
-            background: "#000000",
-            color: "#fff",
-          },
-        }}
-      />
-      <SanityLive />
-      <ChatIcon />
     </div>
   );
 }
