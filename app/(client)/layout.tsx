@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { SanityLive } from "@/sanity/lib/live";
-import { Toaster } from "react-hot-toast";
 import { VisualEditing } from "next-sanity";
 import { draftMode } from "next/headers";
 import DisableDraftMode from "@/components/DisableDraftMode";
-import ChatIcon from "@/components/new/ChatIcon";
+
 
 export const metadata: Metadata = {
   title: "Er-Marketplace",
