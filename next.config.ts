@@ -13,8 +13,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  basePath: isProd ? "/store.er" : "",
-  assetPrefix: isProd ? "/store.er/" : "",
+  basePath: "",
+  assetPrefix: "",
   eslint: {
     ignoreDuringBuilds: true,
   },
