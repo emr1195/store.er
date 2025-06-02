@@ -1,9 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "export", // <- necesario para generar sitio estático
   images: {
-    unoptimized: true, // necesario si usas <Image />
     remotePatterns: [
       {
         protocol: "https",
@@ -11,8 +9,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  basePath: "",
-  assetPrefix: "",
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -22,3 +18,4 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
