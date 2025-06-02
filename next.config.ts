@@ -1,11 +1,9 @@
 import type { NextConfig } from "next";
 
-const isProd = process.env.NODE_ENV === "production";
-
 const nextConfig: NextConfig = {
-  
+  output: "export", // <- necesario para generar sitio estático
   images: {
-    unoptimized: true, // necesario para next export si usas imágenes
+    unoptimized: true, // necesario si usas <Image />
     remotePatterns: [
       {
         protocol: "https",
