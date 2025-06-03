@@ -46,21 +46,12 @@ const AddToCartButton = ({ product, className }: Props) => {
           </div>
         </div>
       ) : (
-        <Button
-          onClick={() => {
-            addItem(product);
-            toast.success(
-              `${product?.name?.substring(0, 12)}... added successfully!`
-            );
-          }}
-          disabled={isOutOfStock}
-          className={cn(
-            "w-full bg-transparent text-darkColor shadow-none border border-darkColor/30 font-semibold tracking-wide hover:text-white cursor-pointer hoverEffect",
-            className
-          )}
-        >
+        <Button onClick={() => { addItem(product); toast.success(`${product?.name?.substring(0, 12)}... added successfully!`);}}disabled={isOutOfStock}
+        className={cn("w-full bg-transparent text-darkColor shadow-none border border-darkColor/30 font-semibold tracking-wide hover:text-white cursor-pointer hoverEffect","text-xs sm:text-sm md:text-base text-center break-words whitespace-normal px-2 py-2", className)}>
           Agregar al carrito
         </Button>
+
+
       )}
     </div>
   );

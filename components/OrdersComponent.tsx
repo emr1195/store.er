@@ -4,12 +4,7 @@ import { TableBody, TableCell, TableRow } from "./ui/table";
 import PriceFormatter from "./PriceFormatter";
 import { MY_ORDERS_QUERYResult } from "@/sanity.types";
 import OrderDetailsDialog from "./OrderDetailsDialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "./ui/tooltip";
+import {Tooltip,TooltipContent,TooltipProvider,TooltipTrigger,} from "./ui/tooltip";
 import { format } from "date-fns";
 import { Trash } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -27,18 +22,17 @@ const OrdersComponent = ({ orders }: { orders: MY_ORDERS_QUERYResult }) => {
   const router = useRouter();
 
   const refreshOrders = useCallback(() => {
-    // This will trigger a refresh of the page data
     router.refresh();
   }, [router]);
   const handleDeleteOrder = async (
     orderId: string,
     event: React.MouseEvent
   ) => {
-    event.stopPropagation(); // Prevent expanding the order when clicking delete
+    event.stopPropagation();
 
     if (
       !confirm(
-        "Are you sure you want to delete this order? This action cannot be undone."
+        "Seguro que deseas eliminar este pedido? ."
       )
     ) {
       return;
@@ -57,21 +51,21 @@ const OrdersComponent = ({ orders }: { orders: MY_ORDERS_QUERYResult }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to delete order");
+        throw new Error(errorData.error || "Error al eliminar");
       }
 
-      // Update the local state to remove the deleted order
+      
 
-      toast.success("Order deleted successfully");
+      toast.success("Pedido Eliminado");
 
-      // Refresh the page data to get the updated orders list
+     
       refreshOrders();
     } catch (error) {
-      console.error("Error deleting order:", error);
+      console.error("Error eliminando la orden:", error);
       toast.error(
         error instanceof Error
           ? error.message
-          : "Failed to delete order. Please try again."
+          : "La orden no fue eliminada intenta nuevamente."
       );
     } finally {
       setIsDeleting(null);
@@ -134,7 +128,7 @@ const OrdersComponent = ({ orders }: { orders: MY_ORDERS_QUERYResult }) => {
                       onClick={(e) => handleDeleteOrder(order._id, e)}
                       className="ml-2 text-red-500 hover:text-red-700 cursor-pointer transition-colors"
                       disabled={isDeleting === order._id}
-                      aria-label="Delete order"
+                      aria-label="Borrar Orden"
                     >
                       {isDeleting === order._id ? (
                         <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
@@ -146,7 +140,7 @@ const OrdersComponent = ({ orders }: { orders: MY_ORDERS_QUERYResult }) => {
                 </TableRow>
               </TooltipTrigger>
               <TooltipContent className="text-white font-medium">
-                <p>Click to see order details</p>
+                <p>Detalles</p>
               </TooltipContent>
             </Tooltip>
           ))}
