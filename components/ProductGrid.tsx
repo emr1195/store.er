@@ -13,7 +13,7 @@ const ProductGrid = () => {
   const [loading, setLoading] = useState(false);
   const [selectedTab, setSelectedTab] = useState("");
 
-  // Ordenamos por _createdAt ascendente (más antiguo primero)
+  
   const query = `
     *[_type == "product" ${selectedTab ? '&& variant == $variant' : ''}]
     | order(_createdAt asc)
@@ -24,7 +24,7 @@ const ProductGrid = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await client.fetch(query, params, { cache: 'no-store' });
+        const response = await client.fetch(query, params, { cache: 'no-store', next: { revalidate: 0 } });
         setProducts(await response);
       } catch (error) {
         console.log("Product fetching Error", error);
