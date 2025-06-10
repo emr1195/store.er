@@ -24,7 +24,7 @@ const ProductGrid = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await client.fetch(query, params, { cache: 'no-store', next: { revalidate: 0 } });
+        const response = await client.fetch<PRODUCTS_QUERYResult>(`*[_type == "product"] | order(_createdAt asc)`,{},{ cache: 'no-store', next: { revalidate: 0 } });
         setProducts(await response);
       } catch (error) {
         console.log("Product fetching Error", error);
