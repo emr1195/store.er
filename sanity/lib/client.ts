@@ -1,14 +1,12 @@
 import { createClient } from "next-sanity";
-
 import { apiVersion, dataset, projectId } from "../env";
-
-console.log("Sanity API Version:", apiVersion)
 
 export const client = createClient({
   projectId,
   dataset,
   apiVersion,
-  useCdn: false, // Set to false if statically generating pages, using ISR or tag-based revalidation
+  token: process.env.NEXT_PUBLIC_SANITY_TOKEN, // Añade esta línea
+  useCdn: false,
   stega: {
     studioUrl:
       process.env.NODE_ENV === "production"
