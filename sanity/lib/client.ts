@@ -6,7 +6,7 @@ export const client = createClient({
   dataset,
   apiVersion,
   useCdn: false,
-  stega: {
+    stega: {
     studioUrl:
       process.env.NODE_ENV === "production"
         ? `https://${process.env.VERCEL_URL}/studio`
