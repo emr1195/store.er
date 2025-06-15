@@ -7,11 +7,13 @@ import { client } from "@/sanity/lib/client";
 import HomeTabbar from "./new/HomeTabbar";
 import NoProductAvailable from "./new/NoProductAvailable";
 import { Loader2 } from "lucide-react";
+import { productType } from "@/constants";
 
 const ProductGrid = () => {
   const [products, setProducts] = useState<PRODUCTS_QUERYResult>([]);
   const [loading, setLoading] = useState(false);
   const [selectedTab, setSelectedTab] = useState("");
+  
 
   
   const query = `
@@ -21,10 +23,11 @@ const ProductGrid = () => {
   const params = selectedTab ? { variant: selectedTab.toLowerCase() } : {};
 
   useEffect(() => {
+    console.log(selectedTab)
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await client.fetch<PRODUCTS_QUERYResult>(`*[_type == "product"] | order(_createdAt asc)`,{},{ cache: 'no-store', next: { revalidate: 0 } });
+        const response = await client.fetch(query, params);
         setProducts(await response);
       } catch (error) {
         console.log("Product fetching Error", error);
