@@ -48,7 +48,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, categories }) => {
               pathname === `/` && "text-white"
             }`}
           >
-            Home
+            Inicio
           </Link>
           {categories?.map((item) => (
             <Link
