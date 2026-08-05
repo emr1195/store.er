@@ -1,69 +1,45 @@
 "use client";
+
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { PRODUCTS_QUERYResult } from "@/sanity.types";
-import React, { useEffect, useState } from "react";
 import ProductCard from "./ProductCard";
-import { motion, AnimatePresence } from "motion/react";
 import HomeTabbar from "./new/HomeTabbar";
 import NoProductAvailable from "./new/NoProductAvailable";
-import { Loader2 } from "lucide-react";
 
-const ProductGrid = () => {
+export default function ProductGrid() {
   const [products, setProducts] = useState<PRODUCTS_QUERYResult>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [selectedTab, setSelectedTab] = useState("");
-  
+  const [requestVersion, setRequestVersion] = useState(0);
 
-  
   useEffect(() => {
+    const controller = new AbortController();
     const fetchData = async () => {
-      setLoading(true);
+      setLoading(true); setError(false);
       try {
         const params = new URLSearchParams();
-        if (selectedTab) params.set("variant", selectedTab.toLowerCase());
-        const response = await fetch(`/api/catalog?${params}`);
-        if (!response.ok) throw new Error("No se pudo cargar el catálogo");
+        if (selectedTab) params.set("variant", selectedTab);
+        const response = await fetch(`/api/catalog?${params}`, { signal: controller.signal });
+        if (!response.ok) throw new Error("CATALOG_UNAVAILABLE");
         setProducts(await response.json());
-      } catch (error) {
-        console.log("Product fetching Error", error);
-      } finally {
-        setLoading(false);
-      }
+      } catch (requestError) {
+        if ((requestError as Error).name !== "AbortError") { setProducts([]); setError(true); }
+      } finally { if (!controller.signal.aborted) setLoading(false); }
     };
     fetchData();
-  }, [selectedTab]);
+    return () => controller.abort();
+  }, [selectedTab, requestVersion]);
 
   return (
-    <div className="mt-10 flex flex-col items-center">
-      <HomeTabbar selectedTab={selectedTab} onTabSelect={(tab) => setSelectedTab(tab ?? "")} />
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-10 min-h-80 space-y-4 text-center bg-gray-100 rounded-lg w-full mt-10">
-          <motion.div className="flex items-center space-x-2 text-blue-600">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Cargando...</span>
-          </motion.div>
-        </div>
-      ) : products?.length ? (
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8 mt-10">
-          <>
-            {products.map((product) => (
-              <AnimatePresence key={product?._id}>
-                <motion.div
-                  layout
-                  initial={{ opacity: 0.2 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                >
-                  <ProductCard key={product?._id} product={product} />
-                </motion.div>
-              </AnimatePresence>
-            ))}
-          </>
-        </div>
-      ) : (
-        <NoProductAvailable selectedTab={selectedTab} />
-      )}
-    </div>
+    <section id="productos" aria-labelledby="products-title" className="scroll-mt-24">
+      <div className="mb-8 text-center"><p className="text-sm font-black uppercase tracking-[.18em] text-brand-blue">Catálogo oficial</p><h2 id="products-title" className="mt-2 text-3xl font-black text-brand-navy sm:text-4xl">Encuentra lo que necesitas</h2><p className="mx-auto mt-3 max-w-2xl text-slate-600">Explora artículos para tu uniforme, actividades y destacamento.</p></div>
+      <HomeTabbar selectedTab={selectedTab} onTabSelect={setSelectedTab} />
+      {loading ? <div role="status" className="mt-8 flex min-h-64 items-center justify-center gap-2 rounded-2xl bg-white text-brand-blue"><Loader2 className="h-5 w-5 animate-spin" /><span className="font-bold">Cargando productos…</span></div>
+      : error ? <div role="alert" className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-8 text-center"><p className="font-bold text-brand-red">No pudimos cargar los productos.</p><button onClick={() => setRequestVersion((version) => version + 1)} className="mt-3 min-h-11 font-bold text-brand-blue underline">Intentar nuevamente</button></div>
+      : products.length ? <div className="mt-8 grid grid-cols-1 gap-4 min-[390px]:grid-cols-2 md:grid-cols-3 md:gap-6 xl:grid-cols-4">{products.map((product) => <ProductCard key={product._id} product={product} />)}</div>
+      : <NoProductAvailable selectedTab={selectedTab || "Todos"} />}
+    </section>
   );
-};
-
-export default ProductGrid;
+}

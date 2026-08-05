@@ -12,10 +12,10 @@ const MobileMenu = ({ categories }: { categories: CATEGORIES_QUERYResult }) => {
   };
   return (
     <>
-      <button onClick={toggleSidebar}>
-        <AlignLeft className="w-6 h-6 hover:text-hoverColor hoverEffect md:hidden" />
+      <button onClick={toggleSidebar} aria-label="Abrir menú" aria-expanded={isSidebarOpen} aria-controls="mobile-navigation" className="flex h-11 w-11 items-center justify-center rounded-xl text-brand-navy hover:bg-blue-50 lg:hidden">
+        <AlignLeft className="h-6 w-6" />
       </button>
-      <div className="md:hidden">
+      <div className="lg:hidden">
         <Sidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
