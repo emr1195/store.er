@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, Search, X } from "lucide-react";
 import { Product } from "@/sanity.types";
-import { getProductImageUrl, needsFinalProductImage } from "@/lib/productImages";
+import { getProductImageUrl } from "@/lib/productImages";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 import { Input } from "../ui/input";
 import PriceView from "../PriceView";
@@ -43,8 +43,7 @@ export default function SearchBar() {
           {loading ? <div role="status" className="flex items-center justify-center gap-2 py-12 font-bold text-brand-blue"><Loader2 className="h-5 w-5 animate-spin" /> Buscando…</div>
           : products.length ? <ul className="divide-y divide-slate-100">{products.map((product) => {
             const image = getProductImageUrl(product, 240);
-            const imagePending = needsFinalProductImage(product);
-            return <li key={product._id}><Link href={`/product/${product.slug?.current}`} onClick={() => setOpen(false)} className="flex min-h-24 items-center gap-4 p-3 transition hover:bg-blue-50"><ProductImage src={image} sizes="80px" className="h-20 w-20 shrink-0 rounded-xl" imageClassName="object-contain p-1" alt={imagePending ? `Imagen final pendiente para ${product.name ?? "producto"}` : product.name ?? "Producto"} /><span className="min-w-0 flex-1"><span className="line-clamp-2 font-bold text-brand-navy">{product.name}</span><PriceView price={product.price} discount={product.discount} className="mt-1 text-base" /></span></Link></li>;
+            return <li key={product._id}><Link href={`/product/${product.slug?.current}`} onClick={() => setOpen(false)} className="flex min-h-24 items-center gap-4 p-3 transition hover:bg-blue-50"><ProductImage src={image} sizes="80px" className="h-20 w-20 shrink-0 rounded-xl" imageClassName="object-contain p-1" alt={product.name ?? "Producto"} /><span className="min-w-0 flex-1"><span className="line-clamp-2 font-bold text-brand-navy">{product.name}</span><PriceView price={product.price} discount={product.discount} className="mt-1 text-base" /></span></Link></li>;
           })}</ul>
           : <div className="flex min-h-40 items-center justify-center px-6 text-center text-sm text-slate-500">{search ? "No encontramos productos con ese nombre." : "Escribe para buscar en el catálogo."}</div>}
         </div>

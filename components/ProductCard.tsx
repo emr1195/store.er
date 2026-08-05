@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Product } from "@/sanity.types";
-import { getProductImageUrl, needsFinalProductImage } from "@/lib/productImages";
+import { getProductImageUrl } from "@/lib/productImages";
 import PriceView from "./PriceView";
 import AddToCartButton from "./AddToCartButton";
 import ProductImage from "./new/ProductImage";
@@ -10,14 +10,13 @@ const statusLabels: Record<string, string> = { new: "Nuevo", hot: "Destacado", s
 
 export default function ProductCard({ product }: { product: Product }) {
   const image = getProductImageUrl(product, 700);
-  const imagePending = needsFinalProductImage(product);
   const stock = product.stock ?? 0;
   const category = variantLabels[String(product.variant)] ?? "Artículo oficial";
   const badge = product.status ? statusLabels[product.status] : stock > 0 && stock <= 3 ? "Pocas unidades" : null;
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition motion-safe:hover:-translate-y-1 motion-safe:hover:shadow-lg">
       <Link href={`/product/${product.slug?.current}`} className="relative block aspect-square overflow-hidden bg-slate-100 focus-visible:outline-none" aria-label={`Ver ${product.name ?? "producto"}`}>
-        <ProductImage src={image} alt={imagePending ? `Imagen final pendiente para ${product.name ?? "producto"}` : `${product.name ?? "Producto"} de la tienda de Exploradores del Rey`} sizes="(max-width: 389px) 100vw, (max-width: 767px) 50vw, (max-width: 1279px) 33vw, 25vw" className="h-full w-full" imageClassName="object-contain p-4 transition duration-300 motion-safe:group-hover:scale-[1.03]" />
+        <ProductImage src={image} alt={`${product.name ?? "Producto"} de la tienda de Exploradores del Rey`} sizes="(max-width: 389px) 100vw, (max-width: 767px) 50vw, (max-width: 1279px) 33vw, 25vw" className="h-full w-full" imageClassName="object-contain p-4 transition duration-300 motion-safe:group-hover:scale-[1.03]" />
         {badge && <span className="absolute left-3 top-3 rounded-full bg-brand-navy px-3 py-1 text-xs font-black text-white shadow-sm">{badge}</span>}
       </Link>
       <div className="flex flex-1 flex-col p-4">
