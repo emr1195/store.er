@@ -1,60 +1,37 @@
 "use client";
-import { Product } from "@/sanity.types";
-import React, { useEffect, useState } from "react";
+
+import { useEffect, useState } from "react";
+import { Loader2, ShoppingCart } from "lucide-react";
 import toast from "react-hot-toast";
-import PriceFormatter from "./PriceFormatter";
-import { Button } from "./ui/button";
+import { Product } from "@/sanity.types";
 import useCartStore from "@/store";
 import QuantityButtons from "./QuantityButtons";
+import PriceFormatter from "./PriceFormatter";
+import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 
-interface Props {
-  product: Product;
-  className?: string;
-}
+interface Props { product: Product; className?: string; }
 
-const AddToCartButton = ({ product, className }: Props) => {
+export default function AddToCartButton({ product, className }: Props) {
   const { addItem, getItemCount } = useCartStore();
-  const [isClient, setIsClient] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const itemCount = getItemCount(product._id);
+  const outOfStock = (product.stock ?? 0) <= 0;
+  useEffect(() => setMounted(true), []);
 
-  const itemCount = getItemCount(product?._id);
-  const isOutOfStock = product?.stock === 0;
+  const handleAdd = () => {
+    if (adding || outOfStock) return;
+    setAdding(true);
+    addItem(product);
+    toast.success("Producto agregado");
+    window.setTimeout(() => setAdding(false), 450);
+  };
 
-  // Use useEffect to set isClient to true after component mounts
-  // This ensures that the component only renders on the client-side
-  // Preventing hydration errors due to server/client mismatch
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-  if (!isClient) {
-    return null;
+  if (!mounted) return <div className="h-12 w-full animate-pulse rounded-xl bg-slate-100" aria-hidden="true" />;
+  if (itemCount > 0) {
+    const discountedPrice = (product.price ?? 0) * (1 - (product.discount ?? 0) / 100);
+    return <div className="min-h-12 w-full rounded-xl border border-slate-200 p-2"><div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-500">Cantidad</span><QuantityButtons product={product} /></div><div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-1"><span className="text-xs font-bold text-brand-navy">Total</span><PriceFormatter amount={discountedPrice * itemCount} /></div></div>;
   }
-  return (
-    <div className="w-full h-12 flex items-center">
-      {itemCount ? (
-        <div className="text-sm w-full">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Cantidad</span>
-            <QuantityButtons product={product} />
-          </div>
-          <div className="flex items-center justify-between border-t pt-1">
-            <span className="text-xs font-semibold">total</span>
-            <PriceFormatter
-              amount={product?.price ? product.price * itemCount : 0}
-            />
-          </div>
-        </div>
-      ) : (
-        <Button onClick={() => { addItem(product); toast.success(`${product?.name?.substring(0, 12)}... added successfully!`);}}disabled={isOutOfStock}
-        className={cn("w-full bg-transparent text-darkColor shadow-none border border-darkColor/30 font-semibold tracking-wide hover:text-white cursor-pointer hoverEffect","text-xs sm:text-sm md:text-base text-center break-words whitespace-normal px-2 py-2", className)}>
-          Agregar al carrito
-        </Button>
-
-
-      )}
-    </div>
-  );
-};
-
-export default AddToCartButton;
+  return <Button type="button" onClick={handleAdd} disabled={outOfStock || adding} aria-busy={adding} className={cn("min-h-12 w-full rounded-xl bg-brand-blue px-4 font-black text-white shadow-sm hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-brand-blue active:scale-[.98] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600", className)}>{adding ? <><Loader2 className="animate-spin" /> Agregando…</> : outOfStock ? "Agotado" : <><ShoppingCart /> Agregar al carrito</>}</Button>;
+}

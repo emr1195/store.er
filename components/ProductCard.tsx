@@ -1,42 +1,31 @@
+import Image from "next/image";
+import Link from "next/link";
 import { Product } from "@/sanity.types";
 import { urlFor } from "@/sanity/lib/image";
-import Image from "next/image";
-import React from "react";
 import PriceView from "./PriceView";
-import Link from "next/link";
 import AddToCartButton from "./AddToCartButton";
-import Title from "./Title";
 
-const ProductCard = ({ product }: { product: Product }) => {
+const variantLabels: Record<string, string> = { tshirt: "Camisetas", jacket: "Chaquetas", pants: "Pantalones", pin: "Pines", patch: "Parches", cap: "Gorras", mug: "Tazas", short: "Pantalones cortos", others: "Otros" };
+const statusLabels: Record<string, string> = { new: "Nuevo", hot: "Destacado", sale: "Oferta" };
+
+export default function ProductCard({ product }: { product: Product }) {
+  const image = product.images?.[0]?.asset ? urlFor(product.images[0]).width(700).height(700).fit("max").auto("format").url() : "/product-placeholder.svg";
+  const stock = product.stock ?? 0;
+  const category = variantLabels[String(product.variant)] ?? "Artículo oficial";
+  const badge = product.status ? statusLabels[product.status] : stock > 0 && stock <= 3 ? "Pocas unidades" : null;
   return (
-    <div className="rounded-lg overflow-hidden group text-sm">
-      <div className="overflow-hidden relative bg-gradient-to-r from-zinc-200 via-zinc-300 to-zinc-200 ">
-        {product?.images && (
-          <Link href={`/product/${product?.slug?.current}`}>
-            <Image
-              src={urlFor(product.images[0]).url()}
-              alt="productImage"
-              width={500}
-              height={500}
-              // loading="lazy"
-              priority
-              className={`w-full h-62 object-fit overflow-hidden   transition-transform duration-500 ${product?.stock !== 0 && "group-hover:scale-105"}`}
-            />
-          </Link>
-        )}
+    <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition motion-safe:hover:-translate-y-1 motion-safe:hover:shadow-lg">
+      <Link href={`/product/${product.slug?.current}`} className="relative block aspect-square overflow-hidden bg-slate-100 focus-visible:outline-none" aria-label={`Ver ${product.name ?? "producto"}`}>
+        <Image src={image} alt={`${product.name ?? "Producto"} de la tienda oficial de Exploradores del Rey`} fill sizes="(max-width: 389px) 100vw, (max-width: 767px) 50vw, (max-width: 1279px) 33vw, 25vw" className="object-contain p-4 transition duration-300 motion-safe:group-hover:scale-[1.03]" />
+        {badge && <span className="absolute left-3 top-3 rounded-full bg-brand-navy px-3 py-1 text-xs font-black text-white shadow-sm">{badge}</span>}
+      </Link>
+      <div className="flex flex-1 flex-col p-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-brand-blue">{category}</p>
+        <Link href={`/product/${product.slug?.current}`} className="mt-1 line-clamp-2 min-h-12 text-base font-black leading-6 text-brand-navy hover:text-brand-blue">{product.name ?? "Producto sin nombre"}</Link>
+        <div className="mt-2"><PriceView price={product.price} discount={product.discount} className="text-lg font-black text-ink" /></div>
+        <p className={`mt-2 inline-flex items-center gap-2 text-sm font-bold ${stock > 0 ? "text-emerald-700" : "text-slate-500"}`}><span className={`h-2 w-2 rounded-full ${stock > 0 ? "bg-emerald-500" : "bg-slate-400"}`} />{stock > 0 ? "Disponible" : "Agotado"}</p>
+        <div className="mt-auto pt-4"><AddToCartButton product={product} /></div>
       </div>
-      <div className="py-3 px-2 flex flex-col gap-1.5 bg-zinc-50 border border-t-0 rounded-md rounded-tl-none rounded-tr-none">
-        <Title className="text-base line-clamp-1">{product?.name}</Title>
-        <p>{product?.intro}</p>
-        <PriceView
-          price={product?.price}
-          discount={product?.discount}
-          className="text-lg"
-        />
-        <AddToCartButton product={product} />
-      </div>
-    </div>
+    </article>
   );
-};
-
-export default ProductCard;
+}

@@ -1,38 +1,19 @@
 "use client";
+
 import { productType } from "@/constants";
-import { Home } from "lucide-react";
 
-interface Props {
-  selectedTab: string;
-  onTabSelect: (tab: string | null) => void; // Cambiado para aceptar null
-}
+interface Props { selectedTab: string; onTabSelect: (tab: string) => void; }
 
-const HomeTabbar = ({ selectedTab, onTabSelect }: Props) => {
+export default function HomeTabbar({ selectedTab, onTabSelect }: Props) {
+  const options = [{ title: "Todos", value: "" }, ...productType];
   return (
-    <div className="w-full px-2 flex justify-center">
-      <div className="flex flex-wrap justify-center items-center gap-2 text-sm font-semibold max-w-screen-lg">
-        <button 
-          onClick={() => onTabSelect(null)} // Llama a onTabSelect con null para limpiar filtros
-          className={`border border-darkColor px-2 py-2 rounded-full hover:bg-darkColor hover:text-white transition ${
-            !selectedTab ? "bg-darkColor text-white" : "" // Resalta si no hay filtro seleccionado
-          }`}
-        >
-          <Home className="w-5 h-5" />
-        </button>
-        {productType?.map((item) => (
-          <button
-            onClick={() => onTabSelect(item?.value)}
-            key={item?.title}
-            className={`border border-darkColor px-4 py-1.5 rounded-full hover:bg-darkColor hover:text-white transition ${
-              selectedTab === item?.value ? "bg-darkColor text-white" : ""
-            }`}
-          >
-            {item?.title}
-          </button>
-        ))}
+    <div className="w-full overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div role="tablist" aria-label="Filtrar productos por categoría" className="flex min-w-max gap-2 px-0.5 sm:justify-center">
+        {options.map((item) => {
+          const active = selectedTab === item.value;
+          return <button type="button" role="tab" aria-selected={active} onClick={() => onTabSelect(item.value)} key={item.title} className={`min-h-11 rounded-full border px-4 text-sm font-bold transition focus-visible:outline-none ${active ? "border-brand-blue bg-brand-blue text-white shadow-sm" : "border-slate-300 bg-white text-slate-700 hover:border-brand-blue hover:text-brand-blue"}`}>{item.title}</button>;
+        })}
       </div>
     </div>
   );
-};
-
-export default HomeTabbar;
+}

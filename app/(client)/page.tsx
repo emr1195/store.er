@@ -1,12 +1,18 @@
 import Container from "@/components/Container";
 import HomeBanner from "@/components/new/HomeBanner";
 import ProductGrid from "@/components/ProductGrid";
+import StoreBenefits from "@/components/StoreBenefits";
+import StoreInformation from "@/components/StoreInformation";
 
 export default function Home() {
   return (
-    <Container className="py-10">
+    <main>
       <HomeBanner />
-      <ProductGrid />
-    </Container>
+      <StoreBenefits />
+      <Container className="py-12 sm:py-16">
+        <ProductGrid />
+      </Container>
+      <StoreInformation />
+    </main>
   );
 }

@@ -85,3 +85,16 @@ El dataset debe configurarse como privado porque los pedidos contienen datos per
 - Conserva pedidos, auditorías y movimientos; cancela o archiva en lugar de borrar.
 - Supervisa eventos `payment_amount_mismatch`, fallos de webhook y reservas pendientes.
 - Los reembolsos necesitan autorización administrativa y confirmación Stripe antes de cambiar el pedido a `refunded`.
+
+## Contenido pendiente para la tienda
+
+Antes de publicar información comercial definitiva, la administración debe confirmar:
+
+- zonas, modalidad, costos y tiempos de entrega;
+- tiempo estimado de preparación;
+- política de cambios y devoluciones;
+- número oficial de WhatsApp;
+- enlaces oficiales de Facebook, Instagram y YouTube;
+- métodos de pago que estarán habilitados en Stripe.
+
+El home identifica estos datos como “pendientes de confirmar” para no inventar políticas. Los archivos `images/products/uploaded/dummy_one.png`, `dummy_two.png`, `dummy_three.png` y `dummary_four.png` son recursos provisionales y no deben asignarse a productos publicados. Los productos sin fotografía utilizan `public/product-placeholder.svg`; deben reemplazarse en Sanity por fotografías oficiales, cuadradas, sin marcas de agua y con derechos de uso confirmados.
