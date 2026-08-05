@@ -1,6 +1,7 @@
 import { defineQuery } from "next-sanity";
 import { sanityFetch } from "../lib/live";
 import { backendClient } from "../lib/backendClient";
+import type { Category, Product } from "@/sanity.types";
 
 export const getAllProducts = async () => {
   const PRODUCTS_QUERY = defineQuery(`*[_type=="product"] | order(name asc)`);
@@ -64,6 +65,49 @@ export const getProductBySlug = async (slug: string) => {
   } catch (error) {
     console.error("Error fetching product by ID:", error);
     return null;
+  }
+};
+
+export type ProductCategory = Pick<Category, "_id" | "title" | "slug">;
+
+export const getProductCategory = async (product: Product) => {
+  const categoryId = product.categories?.[0]?._ref;
+  if (!categoryId) return null;
+
+  const PRODUCT_CATEGORY_QUERY = defineQuery(
+    `*[_type == "category" && _id == $categoryId][0]{_id,title,slug}`
+  );
+
+  try {
+    const category = await sanityFetch({
+      query: PRODUCT_CATEGORY_QUERY,
+      params: { categoryId },
+    });
+    return (category.data as ProductCategory | null) ?? null;
+  } catch (error) {
+    console.error("Error fetching product category:", error);
+    return null;
+  }
+};
+
+export const getRelatedProducts = async (product: Product) => {
+  const categoryId = product.categories?.[0]?._ref ?? "";
+  const variant = product.variant ?? "";
+  const RELATED_PRODUCTS_QUERY = defineQuery(
+    `*[_type == "product" && _id != $productId && isActive != false &&
+      (($categoryId != "" && references($categoryId)) || ($categoryId == "" && variant == $variant))]
+      | order(name asc)[0...4]`
+  );
+
+  try {
+    const products = await sanityFetch({
+      query: RELATED_PRODUCTS_QUERY,
+      params: { productId: product._id, categoryId, variant },
+    });
+    return (products.data as Product[]) ?? [];
+  } catch (error) {
+    console.error("Error fetching related products:", error);
+    return [];
   }
 };
 
