@@ -1,109 +1,23 @@
+import Link from "next/link";
 import Logo from "./new/Logo";
 import SocialMedia from "./new/SocialMedia";
 
-const Footer = () => {
+const columns = [
+  { title: "Comprar", links: [{ label: "Tienda", href: "/#productos" }, { label: "Novedades", href: "/shop" }, { label: "Preguntas frecuentes", href: "/faqs" }] },
+  { title: "Ayuda", links: [{ label: "Envíos y entregas", href: "/faqs" }, { label: "Cambios y devoluciones", href: "/faqs" }, { label: "Contacto", href: "/contact" }] },
+  { title: "Legal", links: [{ label: "Términos y condiciones", href: "/terms" }, { label: "Política de privacidad", href: "/privacy" }, { label: "Nosotros", href: "/about" }] },
+];
+
+export default function Footer() {
   return (
-    <footer className="bg-white border-t">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        {/* Top section with contact info */}
-        {/* <FooterTop /> */}
-
-        <div className="py-12 flex justify-center items-center">
-          <div className="space-y-4 text-center">
-           
-            <div className="flex justify-center">
-              <Logo />
-            </div>
-
-            <p className="text-gray-600 text-sm">
-              Siguenos en Nuestras Redes
-            </p>
-
-            <div className="flex justify-center">
-              <SocialMedia
-                className="text-darkColor/60"
-                iconClassName="border-darkColor/60 hover:border-darkColor hover:text-darkColor"
-                tooltipClassName="bg-darkColor text-white"
-              />
-            </div>
-          </div>
+    <footer className="border-t border-slate-200 bg-brand-navy text-white">
+      <div className="mx-auto max-w-screen-xl px-4 py-12 sm:px-6 lg:px-8">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.3fr_repeat(3,1fr)]">
+          <div><Logo className="rounded-xl bg-white px-2" /><p className="mt-4 max-w-xs text-sm leading-6 text-white/70">Tienda oficial de Exploradores del Rey en Panamá. Uniformes, accesorios y artículos para destacamentos.</p><div id="redes-sociales" className="mt-5"><p className="mb-3 text-xs font-bold uppercase tracking-widest text-white/50">Redes sociales</p><SocialMedia /><p className="mt-2 text-xs text-white/50">Enlaces oficiales pendientes de confirmar.</p></div></div>
+          {columns.map((column) => <nav key={column.title} aria-label={column.title}><h2 className="font-black text-brand-yellow">{column.title}</h2><ul className="mt-4 space-y-3">{column.links.map((link) => <li key={link.label}><Link href={link.href} className="inline-flex min-h-11 items-center text-sm text-white/70 transition hover:text-white hover:underline">{link.label}</Link></li>)}</ul></nav>)}
         </div>
-
-        {/* <div className="py-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          <div className="space-y-4">
-            <Logo children={undefined} />
-            <p className="text-gray-600 text-sm">
-              Siguenos en Nuestras Redes
-            </p>
-            <SocialMedia
-              className="text-darkColor/60"
-              iconClassName="border-darkColor/60 hover:border-darkColor hover:text-darkColor"
-              tooltipClassName="bg-darkColor text-white"
-            />
-          </div>
-
-          <div>
-            <h3 className="font-semibold text-gray-900 mb-4">Enlaces</h3>
-            <ul className="space-y-3">
-              {quickLinksData?.map((item) => (
-                <li key={item?.title}>
-                  <Link
-                    href={item?.href}
-                    className="text-gray-600 hover:text-gray-900 text-sm font-medium hoverEffect"
-                  >
-                    {item?.title}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="font-semibold text-gray-900 mb-4">Categorias</h3>
-            <ul className="space-y-3">
-              {categoriesData.map((item) => (
-                <li key={item?.title}>
-                  <Link
-                    href={`/category/${item?.value}`}
-                    className="text-gray-600 hover:text-gray-900 text-sm font-medium hoverEffect"
-                  >
-                    {item?.title}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="font-semibold text-gray-900 mb-4">Newsletter</h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Subscribe to our newsletter to receive updates and exclusive
-              offers.
-            </p>
-            <form className="space-y-3">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-200"
-              />
-              <button
-                type="submit"
-                className="w-full bg-gray-900 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                Subscribe
-              </button>
-            </form>
-          </div>
-        </div> */}
-
-        {/* Bottom copyright section */}
-        <div className="py-6 border-t text-center text-sm text-gray-600">
-          <p>© {new Date().getFullYear()} Exploradores del Rey Panama all rights reserved.</p>
-        </div>
+        <div className="mt-10 flex flex-col gap-2 border-t border-white/15 pt-6 text-sm text-white/60 sm:flex-row sm:items-center sm:justify-between"><p>© {new Date().getFullYear()} Exploradores del Rey Panamá.</p><p>Tienda oficial · Información comercial pendiente de confirmación donde se indica.</p></div>
       </div>
     </footer>
   );
-};
-
-export default Footer;
+}

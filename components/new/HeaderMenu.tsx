@@ -1,70 +1,25 @@
 "use client";
+
 import Link from "next/link";
-import Logo from "./Logo";
 import { usePathname } from "next/navigation";
+import Logo from "./Logo";
 
-const HeaderMenu = () => {
+const links = [
+  { label: "Inicio", href: "/" },
+  { label: "Tienda", href: "/#productos" },
+  { label: "Novedades", href: "/shop" },
+  { label: "Nosotros", href: "/about" },
+];
+
+export default function HeaderMenu() {
   const pathname = usePathname();
-
   return (
-    <div className="hidden md:inline-flex w-1/3 items-center gap-5 text-sm capitalize font-semibold text-lightColor">
-      <Link href={""}>
-        <Logo />
-      </Link>
-      
-      <Link
-        href={"/"}
-        className={`hover:text-darkColor hoverEffect relative group ${pathname === "/" && "text-darkColor"}`}
-      >
-        Inicio
-        <span
-          className={`absolute -bottom-0.5 left-1/2 w-0 h-0.5 bg-darkColor transition-all duration-300 group-hover:w-1/2 group-hover:left-0 ${
-            pathname === "/" && "w-1/2"
-          }`}
-        />
-        <span
-          className={`absolute -bottom-0.5 right-1/2 w-0 h-0.5 bg-darkColor transition-all duration-300 group-hover:w-1/2 group-hover:right-0 ${
-            pathname === "/" && "w-1/2"
-          }`}
-        />
-      </Link>
-      {/* {categories?.map((category: Category) => (
-        <Link
-          key={category?._id}
-          href={`/category/${category?.slug?.current}`}
-          className={`hover:text-darkColor hoverEffect relative group ${pathname === `/category/${category?.slug?.current}` && "text-darkColor"}`}
-        >
-          {category?.title}
-          <span
-            className={`absolute -bottom-0.5 left-1/2 w-0 h-0.5 bg-darkColor transition-all duration-300 group-hover:w-1/2 group-hover:left-0 ${
-              pathname === `/category/${category?.slug?.current}` && "w-1/2"
-            }`}
-          />
-          <span
-            className={`absolute -bottom-0.5 right-1/2 w-0 h-0.5 bg-darkColor transition-all duration-300 group-hover:w-1/2 group-hover:right-0 ${
-              pathname === `/category/${category?.slug?.current}` && "w-1/2"
-            }`}
-          />
-        </Link>
-      ))} */}
-      <Link
-        href={"/shop"}
-        className={`hover:text-darkColor hoverEffect relative group ${pathname === "/" && "text-darkColor"}`}
-      >
-        Novedades
-        <span
-          className={`absolute -bottom-0.5 left-1/2 w-0 h-0.5 bg-darkColor transition-all duration-300 group-hover:w-1/2 group-hover:left-0 ${
-            pathname === "/shop" && "w-1/2"
-          }`}
-        />
-        <span
-          className={`absolute -bottom-0.5 right-1/2 w-0 h-0.5 bg-darkColor transition-all duration-300 group-hover:w-1/2 group-hover:right-0 ${
-            pathname === "/shop" && "w-1/2"
-          }`}
-        />
-      </Link>
-    </div>
+    <nav aria-label="Navegación principal" className="hidden items-center gap-1 lg:flex">
+      <Logo className="mr-5" />
+      {links.map((link) => {
+        const active = link.href === "/" ? pathname === "/" : link.href.includes("#") ? false : pathname.startsWith(link.href);
+        return <Link key={link.label} href={link.href} aria-current={active ? "page" : undefined} className={`relative flex min-h-11 items-center rounded-xl px-3 text-sm font-bold transition ${active ? "bg-blue-50 text-brand-blue" : "text-slate-600 hover:bg-slate-50 hover:text-brand-navy"}`}>{link.label}</Link>;
+      })}
+    </nav>
   );
-};
-
-export default HeaderMenu;
+}

@@ -6,12 +6,13 @@ import React from "react";
 
 const CartIcon = () => {
   const { items } = useCartStore();
+  const itemCount = items.reduce((total, item) => total + item.quantity, 0);
 
   return (
-    <Link href={"/cart"} className="group relative">
-      <ShoppingBag className="w-5 h-5 group-hover:text-darkColor hoverEffect" />
-      <span className="absolute -top-1 -right-1 bg-darkColor text-white h-3.5 w-3.5 rounded-full text-xs font-semibold flex items-center justify-center">
-        {items?.length ? items.reduce((total, item) => total + item.quantity, 0) : 0}
+    <Link href="/cart" aria-label={`Abrir carrito, ${itemCount} artículos`} className="group relative flex h-11 w-11 items-center justify-center rounded-xl text-brand-navy transition hover:bg-blue-50 hover:text-brand-blue">
+      <ShoppingBag aria-hidden="true" className="h-5 w-5" />
+      <span aria-hidden="true" className="absolute right-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-red px-1 text-[11px] font-bold text-white">
+        {itemCount}
       </span>
     </Link>
   );

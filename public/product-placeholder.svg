@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" role="img" aria-labelledby="title desc">
+  <title id="title">Imagen de producto pendiente</title>
+  <desc id="desc">Placeholder sin marcas de agua para productos que todavía necesitan fotografía definitiva.</desc>
+  <rect width="600" height="600" rx="40" fill="#F0F3FA"/>
+  <circle cx="300" cy="250" r="94" fill="#DCE5FF"/>
+  <path d="M247 213l53-30 53 30 42 12-25 70-35-13v96h-70v-96l-35 13-25-70 42-12z" fill="#2457F5" opacity=".9"/>
+  <text x="300" y="430" text-anchor="middle" font-family="Arial,sans-serif" font-size="25" font-weight="700" fill="#111D3A">Imagen próximamente</text>
+  <text x="300" y="466" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" fill="#596171">Fotografía definitiva pendiente</text>
+</svg>
