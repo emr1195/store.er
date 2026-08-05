@@ -1,302 +1,149 @@
 "use client";
-import Container from "@/components/Container";
-import PriceFormatter from "@/components/PriceFormatter";
-import QuantityButtons from "@/components/QuantityButtons";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { urlFor } from "@/sanity/lib/image";
-import useCartStore from "@/store";
+
+import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { Heart, ShoppingBag, Trash } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-import React, { useEffect, useState } from "react";
+import { ShoppingBag } from "lucide-react";
 import toast from "react-hot-toast";
+import type { Product } from "@/sanity.types";
+import Container from "@/components/Container";
 import EmptyCart from "@/components/EmptyCart";
-import NoAccessToCart from "@/components/NoAccessToCart";
-import { createCheckoutSession } from "@/actions/createCheckoutSession";
-import { calculatePricing, centsToDollars, dollarsToCents } from "@/lib/pricing";
-import paypalLogo from "@/images/paypalLogo.png";
-import {Tooltip,TooltipContent,TooltipProvider,TooltipTrigger,} from "@/components/ui/tooltip";
 import Loading from "@/components/Loading";
+import NoAccessToCart from "@/components/NoAccessToCart";
+import CartItemCard from "@/components/cart/CartItemCard";
+import CheckoutButton from "@/components/cart/CheckoutButton";
+import ClearCartButton from "@/components/cart/ClearCartButton";
+import OrderSummary from "@/components/cart/OrderSummary";
+import PriceFormatter from "@/components/PriceFormatter";
+import { createCheckoutSession } from "@/actions/createCheckoutSession";
+import { calculatePricing, centsToDollars, dollarsToCents, STORE_CURRENCY, type PricingResult } from "@/lib/pricing";
+import useCartStore from "@/store";
 
-const CartPage = () => {
-  const {
-    deleteCartProduct,
-    getItemCount,
-    resetCart,
-  } = useCartStore();
-  const [isClient, setIsClient] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const groupedItems = useCartStore((state) => state.getGroupedItems());
-  const { isSignedIn } = useAuth();
+type CommerceProduct = Product & { taxable?: boolean };
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-  if (!isClient) {
-    return <Loading />;
-  }
-
-  const handleResetCart = () => {
-    const confirmed = window.confirm("Are you sure to reset your Cart?");
-    if (confirmed) {
-      resetCart();
-      toast.success("Your cart reset successfully!");
-    }
-  };
-
-  const handleCheckout = async () => {
-    setLoading(true);
-    try {
-      const checkoutUrl = await createCheckoutSession({
-        items: groupedItems.map(({ product, quantity }) => ({
-          productId: product._id,
-          quantity,
-        })),
-        deliveryMethod: "standard",
-      });
-      if (checkoutUrl) {
-        window.location.href = checkoutUrl;
-      }
-    } catch (error) {
-      console.error("Error creating checkout session:", error);
-      toast.error(error instanceof Error ? error.message : "No se pudo iniciar el pago");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteProduct = (id: string) => {
-    deleteCartProduct(id);
-    toast.success("Product deleted successfully!");
-  };
-
-  const variantTitles: Record<string, string> = {
-    tshirt: "Tshirt",
-    jacket: "Jacket",
-    pants: "Pants",
-    pin: "Pines",
-    short: "Short",
-    others: "Others",
-    patch: "Parche",
-    cap: "Gorras",
-  };
-
-  const statusLabels: Record<string, string> = {
-    new: "Nuevo",
-    used: "Usado",
-    sold: "Vendido",
-  };
-
-  const preview = groupedItems.length ? calculatePricing(
-    groupedItems.map(({ product, quantity }) => ({
-      productId: product._id,
-      unitPriceCents: dollarsToCents(product.price ?? 0),
-      quantity,
-      discountPercent: product.discount ?? 0,
-    })),
-    { shippingCents: Number(process.env.NEXT_PUBLIC_STANDARD_SHIPPING_CENTS ?? "0") }
-  ) : { subtotalCents: 0, discountCents: 0, shippingCents: 0, itbmsCents: 0, totalCents: 0 };
-  const subTotal = centsToDollars(preview.subtotalCents);
-  const discount = centsToDollars(preview.discountCents);
-  const shipping = centsToDollars(preview.shippingCents);
-  const itbms = centsToDollars(preview.itbmsCents);
-  const total = centsToDollars(preview.totalCents);
-
-  return (
-    <div className="bg-gray-50 pb-52 md:pb-10">
-      {isSignedIn ? (
-        <Container>
-          {groupedItems?.length ? (
-            <>
-              <div className="flex items-center gap-2 py-5">
-                <ShoppingBag className="h-6 w-6 text-darkColor" />
-                <h1 className="text-2xl font-semibold">Carrito</h1>
-              </div>
-              <div className="grid lg:grid-cols-3 md:gap-8">
-                <div className="lg:col-span-2 rounded-lg">
-                  <div className="border bg-white rounded-md">
-                    {groupedItems?.map(({ product }) => {
-                      const itemCount = getItemCount(product?._id);
-                      return (
-                        <div
-                          key={product?._id}
-                          className="border-b p-2.5 last:border-b-0 flex items-center justify-between gap-5"
-                        >
-                          <div className="flex flex-1 items-start gap-2 h-36 md:h-44">
-                            {product?.images && (
-                              <div className="border p-0.5 md:p-1 mr-2 rounded-md overflow-hidden group">
-                                <Image
-                                  src={urlFor(product.images[0]).url()}
-                                  alt="productImage"
-                                  width={500}
-                                  height={500}
-                                  loading="lazy"
-                                  className="w-32 md:w-40 h-32 md:h-40 object-cover group-hover:scale-105 overflow-hidden transition-transform duration-500"
-                                />
-                              </div>
-                            )}
-                            <div className="h-full flex flex-1 flex-col justify-between py-1">
-                              <div className="flex flex-col gap-0.5 md:gap-1.5">
-                                <h2 className="text-base font-semibold line-clamp-1">
-                                  {product?.name}
-                                </h2>
-                                <p className="text-sm text-lightColor font-medium">
-                                  {product?.intro}
-                                </p>
-                                <p className="text-sm capitalize">
-                                  Categoria:{" "}
-                                  <span className="font-semibold">
-                                    {product?.variant ? variantTitles[product.variant] ?? "Desconocido" : "Desconocido"}
-                                  </span>
-                                </p>
-                                <p className="text-sm capitalize">
-                                  Estado:{" "}
-                                  <span className="font-semibold">
-                                    {statusLabels[product?.status ?? ""] ?? "Desconocido"}
-                                  </span>
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger>
-                                      <Heart className="w-4 h-4 md:w-5 md:h-5 mr-1 text-gray-500 hover:text-red-600 hoverEffect" />
-                                    </TooltipTrigger>
-                                    <TooltipContent className="font-bold">
-                                      Agregar a favoritos
-                                    </TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                    <TooltipTrigger>
-                                      <Trash
-                                        onClick={() =>
-                                          handleDeleteProduct(product?._id)
-                                        }
-                                        className="w-4 h-4 md:w-5 md:h-5 mr-1 text-gray-500 hover:text-red-600 hoverEffect"
-                                      />
-                                    </TooltipTrigger>
-                                    <TooltipContent className="font-bold bg-red-600">
-                                      Eliminar Producto
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-start justify-between h-36 md:h-44 p-0.5 md:p-1">
-                            <PriceFormatter
-                              amount={(product?.price as number) * itemCount}
-                              className="font-bold text-lg"
-                            />
-                            <QuantityButtons product={product} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <Button
-                      onClick={handleResetCart}
-                      className="m-5 font-semibold"
-                      variant="destructive"
-                    >
-                      Reiniciar Carrito
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-1">
-                  <div className="hidden md:inline-block w-full bg-white p-6 rounded-lg border">
-                    <h2 className="text-xl font-semibold mb-4">
-                      Resumen del Pedido
-                    </h2>
-                    <div className="space-y-4">
-                      <div className="flex justify-between">
-                        <span>SubTotal</span>
-                        <PriceFormatter amount={subTotal} />
-                      </div>
-                      <div className="flex justify-between">
-                        <span>ITBMS</span>
-                        <PriceFormatter amount={itbms} />
-                      </div>
-                      {discount > 0 && <div className="flex justify-between text-green-700"><span>Descuento</span><PriceFormatter amount={-discount} /></div>}
-                      <div className="flex justify-between">
-                        <span>Envio</span>
-                        <PriceFormatter amount={shipping} />
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between font-semibold text-lg">
-                        <span>Total</span>
-                        <PriceFormatter amount={total} className="text-lg font-bold text-black" />
-                      </div>
-                      <Button
-                        onClick={handleCheckout}
-                        disabled={loading}
-                        className="w-full cursor-pointer rounded-full font-semibold tracking-wide"
-                        size="lg"
-                      >
-                        {loading ? "Procesando" : "Realizar pago"}
-                      </Button>
-                      <Link
-                        href="/"
-                        className="text-center text-sm text-darkColor hover:underline border border-darkColor/50 rounded-full flex items-center justify-center py-2 hover:bg-darkColor/5 hover:border-darkColor hoverEffect"
-                      >
-                        <Image src={paypalLogo} className="w-20" alt="paypalLogo" />
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-                    {/*mobile*/}
-                <div className="md:hidden fixed bottom-0 left-0 w-full bg-white pt-2">
-                  <div className="bg-white p-4 rounded-lg border mx-4">
-                    <h2 className="text-lg font-semibold mb-2">Resumen del Pedido</h2>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span>SubTotal</span>
-                        <PriceFormatter amount={subTotal} />
-                      </div>
-                      <div className="flex justify-between">
-                        <span>ITBMS</span>
-                        <PriceFormatter amount={itbms} />
-                      </div>
-                      {discount > 0 && <div className="flex justify-between text-green-700"><span>Descuento</span><PriceFormatter amount={-discount} /></div>}
-                      <div className="flex justify-between">
-                        <span>Envio</span>
-                        <PriceFormatter amount={shipping} />
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between font-semibold text-lg">
-                        <span>Total</span>
-                        <PriceFormatter amount={total} className="text-lg font-bold text-black" />
-                      </div>
-                      <Button
-                        onClick={handleCheckout}
-                        disabled={loading}
-                        className="w-full rounded-full font-semibold tracking-wide"
-                        size="lg"
-                      >
-                        {loading ? "Procesando" : "Realizar pago"}
-                      </Button>
-                      <Link
-                        href="/"
-                        className="text-center text-sm text-darkColor hover:underline border border-darkColor/50 rounded-full flex items-center justify-center py-2 hover:bg-darkColor/5 hover:border-darkColor hoverEffect"
-                      >
-                        <Image src={paypalLogo} className="w-20" alt="paypalLogo" />
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <EmptyCart />
-          )}
-        </Container>
-      ) : (
-        <NoAccessToCart />
-      )}
-    </div>
-  );
+const EMPTY_PRICING: PricingResult = {
+  currency: STORE_CURRENCY,
+  lines: [],
+  subtotalCents: 0,
+  discountCents: 0,
+  taxBaseCents: 0,
+  itbmsCents: 0,
+  shippingCents: 0,
+  totalCents: 0,
 };
 
-export default CartPage;
+export default function CartPage() {
+  const groupedItems = useCartStore((state) => state.items);
+  const deleteCartProduct = useCartStore((state) => state.deleteCartProduct);
+  const resetCart = useCartStore((state) => state.resetCart);
+  const { isLoaded, isSignedIn } = useAuth();
+  const [mounted, setMounted] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted || !isLoaded) return <Loading />;
+  if (!isSignedIn) return <NoAccessToCart />;
+  if (groupedItems.length === 0) return <main className="min-h-screen bg-page-bg"><EmptyCart /></main>;
+
+  let pricing = EMPTY_PRICING;
+  let pricingError = "";
+  try {
+    pricing = calculatePricing(
+      groupedItems.map(({ product, quantity }) => ({
+        productId: product._id,
+        unitPriceCents: dollarsToCents(product.price ?? 0),
+        quantity,
+        discountPercent: product.discount ?? 0,
+        taxable: (product as CommerceProduct).taxable !== false,
+      })),
+      { shippingCents: Number(process.env.NEXT_PUBLIC_STANDARD_SHIPPING_CENTS ?? "0") }
+    );
+  } catch {
+    pricingError = "No pudimos calcular el total del carrito. Revisa los productos e inténtalo nuevamente.";
+  }
+
+  const totalUnits = groupedItems.reduce((total, item) => total + item.quantity, 0);
+  const inventoryError = groupedItems.some(({ product, quantity }) => !Number.isSafeInteger(product.stock) || (product.stock ?? 0) < quantity);
+  const catalogError = groupedItems.some(({ product }) => typeof product.price !== "number" || !Number.isFinite(product.price) || product.price < 0);
+  const checkoutDisabled = Boolean(pricingError) || inventoryError || catalogError || groupedItems.length === 0;
+
+  const handleCheckout = async () => {
+    if (checkoutLoading || checkoutDisabled) return;
+    setCheckoutLoading(true);
+    setCheckoutError("");
+    try {
+      const checkoutUrl = await createCheckoutSession({
+        items: groupedItems.map(({ product, quantity }) => ({ productId: product._id, quantity })),
+        deliveryMethod: "standard",
+      });
+      window.location.assign(checkoutUrl);
+    } catch (error) {
+      console.error("Error creating checkout session:", error);
+      const message = error instanceof Error ? error.message : "No se pudo iniciar el pago";
+      setCheckoutError(message);
+      toast.error(message);
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleDelete = (productId: string) => {
+    deleteCartProduct(productId);
+    toast.success("Producto eliminado del carrito");
+  };
+
+  const handleClear = () => {
+    resetCart();
+    toast.success("Carrito vaciado");
+  };
+
+  return (
+    <main className="min-h-screen bg-page-bg pb-28 md:pb-12">
+      <Container className="max-w-[1280px] py-6 sm:py-9">
+        <header className="mb-6 flex items-center gap-3">
+          <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-brand-blue" aria-hidden="true"><ShoppingBag className="h-6 w-6" /></span>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[.14em] text-brand-blue">Tu compra</p>
+            <h1 className="text-2xl font-black text-brand-navy sm:text-3xl">Carrito <span className="font-semibold text-slate-400">· {totalUnits} {totalUnits === 1 ? "artículo" : "artículos"}</span></h1>
+          </div>
+        </header>
+
+        {(pricingError || inventoryError || catalogError || checkoutError) && (
+          <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+            {checkoutError || pricingError || (catalogError ? "Uno o más productos necesitan actualizar su información antes de continuar." : "Uno o más productos no tienen inventario suficiente. Ajusta la cantidad antes de continuar.")}
+          </div>
+        )}
+
+        <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1.85fr)_minmax(20rem,1fr)] lg:gap-8">
+          <section aria-label="Productos del carrito" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="divide-y divide-slate-200">
+              {groupedItems.map(({ product, quantity }) => {
+                const line = pricing.lines.find((candidate) => candidate.productId === product._id);
+                return (
+                  <CartItemCard
+                    key={product._id}
+                    product={product}
+                    quantity={quantity}
+                    lineSubtotalCents={line?.subtotalCents ?? dollarsToCents(product.price ?? 0) * quantity}
+                    lineDiscountCents={line?.discountCents ?? 0}
+                    onDelete={handleDelete}
+                  />
+                );
+              })}
+            </div>
+            <div className="flex justify-end border-t border-slate-200 bg-slate-50/70 p-3 sm:p-4"><ClearCartButton onClear={handleClear} /></div>
+          </section>
+
+          <OrderSummary pricing={pricing} checkoutLoading={checkoutLoading} checkoutDisabled={checkoutDisabled} onCheckout={handleCheckout} />
+        </div>
+      </Container>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(17,29,58,.1)] backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-md items-center gap-3">
+          <div className="shrink-0"><p className="text-xs text-slate-500">Total</p><PriceFormatter amount={centsToDollars(pricing.totalCents)} className="text-lg font-black text-brand-navy" /></div>
+          <CheckoutButton onCheckout={handleCheckout} loading={checkoutLoading} disabled={checkoutDisabled} compact />
+        </div>
+      </div>
+    </main>
+  );
+}

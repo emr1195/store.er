@@ -1,20 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Heart, Loader2, Minus, Plus, ShoppingCart } from "lucide-react";
+import { Loader2, Minus, Plus, ShoppingCart } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Product } from "@/sanity.types";
 import useCartStore from "@/store";
 import PriceFormatter from "@/components/PriceFormatter";
-
-const FAVORITES_KEY = "store-er-favorites";
+import FavoriteButton from "./FavoriteButton";
 
 export default function ProductPurchaseActions({ product }: { product: Product }) {
   const { addItem, getItemCount } = useCartStore();
   const [mounted, setMounted] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [adding, setAdding] = useState(false);
-  const [favorite, setFavorite] = useState(false);
   const [message, setMessage] = useState("");
   const stock = Math.max(0, product.stock ?? 0);
   const cartCount = mounted ? getItemCount(product._id) : 0;
@@ -23,12 +21,6 @@ export default function ProductPurchaseActions({ product }: { product: Product }
 
   useEffect(() => {
     setMounted(true);
-    try {
-      const stored = JSON.parse(window.localStorage.getItem(FAVORITES_KEY) ?? "[]") as string[];
-      setFavorite(stored.includes(product._id));
-    } catch {
-      window.localStorage.removeItem(FAVORITES_KEY);
-    }
   }, [product._id]);
 
   useEffect(() => {
@@ -44,19 +36,6 @@ export default function ProductPurchaseActions({ product }: { product: Product }
     setMessage(safeQuantity === 1 ? "Producto agregado" : `${safeQuantity} productos agregados`);
     toast.success("Producto agregado");
     window.setTimeout(() => setAdding(false), 450);
-  };
-
-  const toggleFavorite = () => {
-    try {
-      const stored = JSON.parse(window.localStorage.getItem(FAVORITES_KEY) ?? "[]") as string[];
-      const nextFavorite = !stored.includes(product._id);
-      const next = nextFavorite ? [...stored, product._id] : stored.filter((id) => id !== product._id);
-      window.localStorage.setItem(FAVORITES_KEY, JSON.stringify([...new Set(next)]));
-      setFavorite(nextFavorite);
-      toast.success(nextFavorite ? "Guardado en favoritos de este dispositivo" : "Eliminado de favoritos");
-    } catch {
-      toast.error("No pudimos actualizar tus favoritos");
-    }
   };
 
   const disabled = !mounted || adding || remaining <= 0;
@@ -79,9 +58,7 @@ export default function ProductPurchaseActions({ product }: { product: Product }
           {adding ? <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin motion-reduce:animate-none" /> : <ShoppingCart aria-hidden="true" className="h-5 w-5" />}
           {buttonText}
         </button>
-        <button type="button" onClick={toggleFavorite} disabled={!mounted} aria-label={favorite ? "Quitar de favoritos" : "Agregar a favoritos"} aria-pressed={favorite} className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border-2 transition motion-reduce:transition-none ${favorite ? "border-brand-red bg-red-50 text-brand-red" : "border-slate-300 bg-white text-slate-600 hover:border-brand-blue hover:text-brand-blue"}`}>
-          <Heart aria-hidden="true" className={`h-6 w-6 ${favorite ? "fill-current" : ""}`} />
-        </button>
+        <FavoriteButton productId={product._id} className="h-14 w-14" />
       </div>
       <p role="status" aria-live="polite" className="mt-2 min-h-5 text-sm font-semibold text-emerald-700">{message}</p>
 
