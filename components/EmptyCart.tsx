@@ -1,73 +1,13 @@
-"use client";
-
-import { ShoppingCart } from "lucide-react";
-import Image from "next/image";
+import { ShoppingBag } from "lucide-react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import emptyCart from "@/images/emptyCart.png";
 
 export default function EmptyCart() {
   return (
-    <div className="py-10 md:py-20 bg-gradient-to-b from-blue-50 to-white flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full space-y-8"
-      >
-        <motion.div
-          animate={{
-            scale: [1, 1.1, 1],
-            rotate: [0, 5, -5, 0],
-          }}
-          transition={{
-            repeat: Infinity,
-            duration: 5,
-            ease: "easeInOut",
-          }}
-          className="relative w-48 h-48 mx-auto"
-        >
-          <Image
-            src={emptyCart}
-            alt="Empty shopping cart"
-            layout="fill"
-            objectFit="contain"
-            className="drop-shadow-lg"
-          />
-          <motion.div
-            animate={{
-              x: [0, -10, 10, 0],
-              y: [0, -5, 5, 0],
-            }}
-            transition={{
-              repeat: Infinity,
-              duration: 3,
-              ease: "linear",
-            }}
-            className="absolute -top-4 -right-4 bg-blue-500 rounded-full p-2"
-          >
-            <ShoppingCart size={24} className="text-white" />
-          </motion.div>
-        </motion.div>
-
-        <div className="text-center space-y-4">
-          <h2 className="text-3xl font-bold text-gray-800">
-            Tu carrito se siente solo
-          </h2>
-          <p className="text-gray-600">
-            Parece que aún no has añadido nada a tu carrito. ¡Vamos a cambiar eso y encontrar productos increíbles para ti!
-          </p>
-        </div>
-
-        <div>
-          <Link
-            href="/"
-            className="block bg-darkColor/5 border border-darkColor/20 text-center py-2.5 rounded-full text-sm font-semibold tracking-wide hover:border-darkColor hover:bg-darkColor hover:text-white hoverEffect"
-          >
-            Descubra los productos
-          </Link>
-        </div>
-      </motion.div>
-    </div>
+    <section className="mx-auto flex min-h-[55dvh] max-w-xl flex-col items-center justify-center px-4 py-16 text-center">
+      <span className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-blue-50 text-brand-blue" aria-hidden="true"><ShoppingBag className="h-9 w-9" /></span>
+      <h1 className="mt-6 text-3xl font-black text-brand-navy sm:text-4xl">Tu carrito está vacío</h1>
+      <p className="mt-3 max-w-md leading-7 text-slate-600">Explora nuestra tienda y encuentra productos para tu destacamento.</p>
+      <Link href="/shop" className="mt-7 inline-flex min-h-12 items-center justify-center rounded-xl bg-brand-blue px-6 font-black text-white shadow-sm hover:bg-blue-700">Ver productos</Link>
+    </section>
   );
 }

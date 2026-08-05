@@ -1,10 +1,11 @@
-import React from "react";
-import { Button } from "./ui/button";
-import { HiMinus, HiPlus } from "react-icons/hi2";
+"use client";
+
+import { useState } from "react";
+import { Loader2, Minus, Plus } from "lucide-react";
 import toast from "react-hot-toast";
+import type { Product } from "@/sanity.types";
 import useCartStore from "@/store";
-import { Product } from "@/sanity.types";
-import { twMerge } from "tailwind-merge";
+import { cn } from "@/lib/utils";
 
 interface Props {
   product: Product;
@@ -12,54 +13,30 @@ interface Props {
   borderStyle?: string;
 }
 
-const QuantityButtons = ({ product, className, borderStyle }: Props) => {
+export default function QuantityButtons({ product, className, borderStyle }: Props) {
   const { addItem, removeItem, getItemCount } = useCartStore();
-  const itemCount = getItemCount(product?._id);
-  const isOutOfStock = product?.stock === 0;
+  const [updating, setUpdating] = useState(false);
+  const itemCount = getItemCount(product._id);
   const reachedStockLimit = product.stock !== undefined && itemCount >= product.stock;
 
-  const handleRemoveProduct = () => {
-    removeItem(product?._id);
-    if (itemCount > 1) {
-      toast.success("Quantity Decreased successfully!");
-    } else {
-      toast.success(`${product?.name?.substring(0, 12)} removed successfully!`);
-    }
+  const update = (direction: "increase" | "decrease") => {
+    if (updating) return;
+    setUpdating(true);
+    if (direction === "increase") addItem(product);
+    else removeItem(product._id);
+    toast.success(direction === "increase" ? "Cantidad actualizada" : "Cantidad reducida");
+    window.setTimeout(() => setUpdating(false), 250);
   };
+
   return (
-    <div
-      className={twMerge(
-        "flex items-center gap-1 pb-1 text-base",
-        borderStyle,
-        className
-      )}
-    >
-      <Button
-        variant="outline"
-        size="icon"
-        className="w-6 h-6 cursor-pointer"
-        onClick={handleRemoveProduct}
-        disabled={itemCount === 0 || isOutOfStock}
-      >
-        <HiMinus />
-      </Button>
-      <span className="font-semibold w-8 text-center text-darkColor">
-        {itemCount}
-      </span>
-      <Button
-        variant="outline"
-        size="icon"
-        className="w-6 h-6 cursor-pointer"
-        onClick={() => {
-          addItem(product);
-          toast.success("Quantity increased successfully!");
-        }}
-        disabled={isOutOfStock || reachedStockLimit}
-      >
-        <HiPlus />
-      </Button>
+    <div className={cn("inline-flex items-center overflow-hidden rounded-xl border border-slate-300 bg-white", borderStyle, className)} role="group" aria-label={`Cantidad de ${product.name ?? "producto"}`}>
+      <button type="button" onClick={() => update("decrease")} disabled={updating || itemCount <= 1} aria-label="Disminuir cantidad" className="inline-flex h-11 w-11 items-center justify-center text-brand-navy hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+        {updating ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" /> : <Minus aria-hidden="true" className="h-4 w-4" />}
+      </button>
+      <output aria-live="polite" className="min-w-11 text-center text-sm font-black text-brand-navy">{itemCount}</output>
+      <button type="button" onClick={() => update("increase")} disabled={updating || reachedStockLimit || (product.stock ?? 0) <= 0} aria-label="Aumentar cantidad" className="inline-flex h-11 w-11 items-center justify-center text-brand-navy hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300">
+        <Plus aria-hidden="true" className="h-4 w-4" />
+      </button>
     </div>
   );
-};
-
-export default QuantityButtons;
+}

@@ -1,44 +1,20 @@
-import React from "react";
 import { SignInButton, SignUpButton } from "@clerk/nextjs";
-import { Button } from "./ui/button";
-import { Card, CardContent,CardFooter, CardHeader,CardTitle,} from "./ui/card";
+import { LockKeyhole } from "lucide-react";
 import Logo from "./new/Logo";
 
-const NoAccessToCart = () => {
+export default function NoAccessToCart() {
   return (
-    <div className="flex items-center justify-center py-12 md:py-32 bg-gray-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <div className="flex justify-center">
-             <Logo />
-          </div>
-          <CardTitle className="text-2xl font-bold text-center">
-            ¡Bienvenido de nuevo!
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-muted-foreground text-center font-medium">
-           Inicia sesión para ver los artículos de tu carrito y finalizar la compra. ¡No te pierdas tus productos favoritos!
-          </p>
-          <SignInButton mode="modal">
-            <Button className="w-full font-semibold" size="lg">
-              Sign in
-            </Button>
-          </SignInButton>
-        </CardContent>
-        <CardFooter className="flex flex-col space-y-2">
-          <div className="text-sm text-muted-foreground text-center">
-            No tienes cuenta?
-          </div>
-          <SignUpButton mode="modal">
-            <Button variant="outline" className="w-full" size="lg">
-              Crear cuenta
-            </Button>
-          </SignUpButton>
-        </CardFooter>
-      </Card>
-    </div>
+    <main className="flex min-h-[65dvh] items-center justify-center bg-page-bg px-4 py-12">
+      <section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-sm sm:p-8">
+        <div className="flex justify-center"><Logo /></div>
+        <span className="mx-auto mt-5 inline-flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-brand-blue" aria-hidden="true"><LockKeyhole className="h-6 w-6" /></span>
+        <h1 className="mt-4 text-2xl font-black text-brand-navy">Inicia sesión para ver tu carrito</h1>
+        <p className="mt-3 text-sm leading-6 text-slate-600">Accede a tu cuenta para revisar tus productos y continuar con el pago.</p>
+        <div className="mt-6 space-y-3">
+          <SignInButton mode="modal"><button type="button" className="min-h-12 w-full rounded-xl bg-brand-blue px-5 font-black text-white hover:bg-blue-700">Iniciar sesión</button></SignInButton>
+          <SignUpButton mode="modal"><button type="button" className="min-h-12 w-full rounded-xl border border-slate-300 px-5 font-bold text-brand-navy hover:bg-slate-50">Crear cuenta</button></SignUpButton>
+        </div>
+      </section>
+    </main>
   );
-};
-
-export default NoAccessToCart;
+}
