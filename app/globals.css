@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-raleway), Arial, Helvetica, sans-serif;
 }
 @theme {
   --color-brand-navy: #111d3a;
@@ -9,12 +9,14 @@ body {
   --color-brand-yellow: #ffd23f;
   --color-brand-red: #e52b38;
   --color-auth-page: #f7f8fc;
+  --color-page-bg: #f7f8fc;
   --color-brand-ink: #15171a;
-  --color-darkColor: #151515;
-  --color-lightColor: #52525b;
+  --color-ink: #15171a;
+  --color-darkColor: #15171a;
+  --color-lightColor: #596171;
   --color-lightOrange: #fca99b;
   --color-lightBlue: #7688db;
-  --color-darkBlue: #6c7fd8;
+  --color-darkBlue: #2457f5;
   --color-darkText: #686e7d;
   --color-lightBg: #f8f8fb;
 }
@@ -75,6 +77,9 @@ body {
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
   * {
     border-color: hsl(var(--border));
   }
@@ -84,13 +89,22 @@ body {
 }
 
 body {
-  font-family: var(--font-raleway);
+  background: var(--color-page-bg);
+  color: var(--color-ink);
+  overflow-x: hidden;
+}
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-brand-blue) 75%, white);
+  outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 }

@@ -9,8 +9,8 @@ export const headerData = [
 ];
 
 export const productType = [
-  { title: "Tshirt", value: "tshirt" },
-  { title: "Jacket", value: "jacket" },
+  { title: "Camisetas", value: "tshirt" },
+  { title: "Chaquetas", value: "jacket" },
   { title: "Pantalones", value: "pants" },
   { title: "Pines", value: "pin" },
   {title: "Parches", value: "patch"},
@@ -19,11 +19,11 @@ export const productType = [
 ];
 
 export const quickLinksData = [
-  { title: "About us", href: "/about" },
-  { title: "Contact us", href: "/contact" },
-  { title: "Terms & Conditions", href: "/terms" },
-  { title: "Privacy Policy", href: "/privacy" },
-  { title: "FAQs", href: "/faqs" },
+  { title: "Nosotros", href: "/about" },
+  { title: "Contacto", href: "/contact" },
+  { title: "Términos y condiciones", href: "/terms" },
+  { title: "Política de privacidad", href: "/privacy" },
+  { title: "Preguntas frecuentes", href: "/faqs" },
 ];
 export const categoriesData = [
   { title: "Tshirt", value: "tshirt" },
@@ -35,28 +35,23 @@ export const categoriesData = [
 ];
 export const faqsData = [
   {
-    question: "What services does Tulos offer?",
-    answer:
-      "Tulos offers a wide range of technology solutions including custom software development, cloud services, and digital transformation consulting.",
+    question: "¿Qué métodos de pago acepta la tienda?",
+    answer: "Los pagos en línea se procesan de forma segura con Stripe. Los métodos específicos habilitados deben confirmarse con la administración de la tienda.",
   },
   {
-    question: "How can I get support for Tulos products?",
-    answer:
-      "You can reach our support team through our contact page or by emailing support@tulos.com.",
+    question: "¿Dónde realizan entregas?",
+    answer: "Las zonas, costos y modalidades de entrega en Panamá están pendientes de confirmación por la administración.",
   },
   {
-    question: "Does Tulos offer training for its products?",
-    answer:
-      "Yes, we offer comprehensive training programs for all our products and services. Please contact our sales team for more information.",
+    question: "¿Cuánto demora la preparación de un pedido?",
+    answer: "El tiempo estimado de preparación está pendiente de confirmación. Consulta el canal de contacto antes de realizar pedidos urgentes.",
   },
   {
-    question: "What industries does Tulos serve?",
-    answer:
-      "Tulos serves a wide range of industries including finance, healthcare, retail, and manufacturing.",
+    question: "¿Cuál es la política de cambios y devoluciones?",
+    answer: "La política comercial de cambios y devoluciones está pendiente de publicación. Contacta a la tienda antes de devolver un artículo.",
   },
   {
-    question: "How does Tulos ensure data security?",
-    answer:
-      "We employ industry-standard security measures and comply with all relevant data protection regulations to ensure the security of our clients' data.",
+    question: "¿Es esta la tienda oficial?",
+    answer: "Sí. Este sitio corresponde a la tienda oficial de Exploradores del Rey en Panamá.",
   },
 ];

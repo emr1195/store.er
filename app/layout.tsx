@@ -5,8 +5,8 @@ import { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ER Panamá",
-  description: "Tienda de Exploradores del Rey en Panamá",
+  title: "ER Panamá | Tienda oficial",
+  description: "Tienda oficial de Exploradores del Rey en Panamá.",
 };
 
 const poppins = localFont({
