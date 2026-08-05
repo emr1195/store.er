@@ -1,98 +1,89 @@
-import { Button } from "@/components/ui/button";
-import {Card, CardContent, CardDescription, CardFooter,CardHeader,CardTitle,} from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { SignInButton } from "@clerk/nextjs";
-import { currentUser } from "@clerk/nextjs/server";
-import { Mail } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import React from "react";
+import { currentUser } from "@clerk/nextjs/server";
+import { ArrowLeft } from "lucide-react";
+import type { Metadata } from "next";
+import AuthActions from "@/components/auth/AuthActions";
 
-const SignInPage = async () => {
+export const metadata: Metadata = {
+  title: "Ingresar | ER Panamá",
+  description: "Ingresa a tu cuenta de la tienda de Exploradores del Rey en Panamá.",
+};
+
+type SignInPageProps = {
+  searchParams: Promise<{ redirect_url?: string }>;
+};
+
+const getSafeRedirectUrl = (redirectUrl?: string) => {
+  if (!redirectUrl?.startsWith("/") || redirectUrl.startsWith("//")) return "/";
+  return redirectUrl;
+};
+
+const SignInPage = async ({ searchParams }: SignInPageProps) => {
   const user = await currentUser();
-  if (user) {
-    redirect("/");
-  }
+  if (user) redirect("/");
+
+  const { redirect_url: requestedRedirectUrl } = await searchParams;
+  const redirectUrl = getSafeRedirectUrl(requestedRedirectUrl);
 
   return (
-    <div className="flex min-h-[70vh] items-center justify-center bg-lightBg px-4 py-12 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md bg-white">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            Ingresar
-          </CardTitle>
-          <CardDescription className="text-center">
-            Escoje tu metodo de ingreso
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Custom buttons for social sign-in */}
-          <div className="space-y-2">
-            <SignInButton mode="modal">
-              <Button
-                variant="outline"
-                className="w-full hover:bg-lightBg hoverEffect cursor-pointer"
-              >
-                <svg
-                  className="mr-2 h-4 w-4"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    fill="#EA4335"
-                  />
-                </svg>
-                Ingresar con Google
-              </Button>
-            </SignInButton>
+    <main className="relative isolate flex min-h-[calc(100dvh-81px)] items-center justify-center overflow-hidden bg-auth-page px-4 py-10 sm:px-6 sm:py-14">
+      <div
+        aria-hidden="true"
+        className="absolute -left-24 top-8 -z-10 h-64 w-64 rounded-full bg-brand-blue/10 blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute -right-20 bottom-4 -z-10 h-56 w-56 rounded-full bg-brand-yellow/15 blur-3xl"
+      />
 
-          </div>
+      <section
+        aria-labelledby="signin-title"
+        className="w-full max-w-[440px] rounded-[18px] border border-slate-200 bg-white px-6 py-7 text-center shadow-[0_16px_40px_rgba(17,29,58,0.08)] min-[375px]:px-8 min-[375px]:py-8"
+      >
+        <Image
+          src="/emblema.png"
+          width={80}
+          height={74}
+          alt="Emblema oficial de Exploradores del Rey"
+          className="mx-auto h-auto w-20 object-contain"
+          priority
+        />
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <Separator className="w-full" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
-                O 
-              </span>
-            </div>
-          </div>
+        <div className="mt-5">
+          <h1 id="signin-title" className="text-2xl font-black tracking-tight text-brand-navy sm:text-[1.75rem]">
+            Bienvenido de nuevo
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600 sm:text-base">
+            Elige cómo deseas ingresar a tu cuenta.
+          </p>
+        </div>
 
-          <SignInButton mode="modal">
-            <Button
-              variant="outline"
-              className="w-full hover:bg-lightBg hoverEffect cursor-pointer"
-            >
-              <Mail className="mr-2 h-4 w-4" />
-              Ingresa tu correo
-            </Button>
-          </SignInButton>
-        </CardContent>
-        <CardFooter className="flex justify-center">
-          <div className="text-sm text-muted-foreground">
-            No&apos;tienes cuenta ?{" "}
-            <SignInButton mode="modal">
-              <button className="underline hover:text-darkBlue hoverEffect cursor-pointer font-semibold decoration-[1px] underline-offset-2">
-                Crear Cuenta
-              </button>
-            </SignInButton>
-          </div>
-        </CardFooter>
-      </Card>
-    </div>
+        <div className="mt-7">
+          <AuthActions redirectUrl={redirectUrl} />
+        </div>
+
+        <p className="mt-6 text-xs leading-5 text-slate-500">
+          Al continuar, aceptas nuestros{" "}
+          <Link href="/terms" className="font-semibold text-brand-navy underline decoration-slate-300 underline-offset-2 hover:text-brand-blue focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue">
+            Términos y Condiciones
+          </Link>{" "}
+          y la{" "}
+          <Link href="/privacy" className="font-semibold text-brand-navy underline decoration-slate-300 underline-offset-2 hover:text-brand-blue focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue">
+            Política de Privacidad
+          </Link>
+          .
+        </p>
+
+        <Link
+          href="/"
+          className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-100 hover:text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2"
+        >
+          <ArrowLeft aria-hidden="true" className="h-4 w-4" /> Volver a la tienda
+        </Link>
+      </section>
+    </main>
   );
 };
 
