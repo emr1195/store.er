@@ -4,6 +4,12 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 @theme {
+  --color-brand-navy: #111d3a;
+  --color-brand-blue: #2457f5;
+  --color-brand-yellow: #ffd23f;
+  --color-brand-red: #e52b38;
+  --color-auth-page: #f7f8fc;
+  --color-brand-ink: #15171a;
   --color-darkColor: #151515;
   --color-lightColor: #52525b;
   --color-lightOrange: #fca99b;
@@ -79,6 +85,14 @@ body {
 
 body {
   font-family: var(--font-raleway);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
 }
 
 .fb-customerchat {
