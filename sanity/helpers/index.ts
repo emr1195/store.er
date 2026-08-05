@@ -1,5 +1,6 @@
 import { defineQuery } from "next-sanity";
 import { sanityFetch } from "../lib/live";
+import { backendClient } from "../lib/backendClient";
 
 export const getAllProducts = async () => {
   const PRODUCTS_QUERY = defineQuery(`*[_type=="product"] | order(name asc)`);
@@ -102,18 +103,14 @@ export const getMyOrders = async (userId: string) => {
     throw new Error("User ID is required");
   }
   const MY_ORDERS_QUERY =
-    defineQuery(`*[_type == 'order' && clerkUserId == $userId] | order(orderData desc){
+    defineQuery(`*[_type == 'order' && clerkUserId == $userId] | order(orderDate desc){
     ...,products[]{
       ...,product->
     }
   }`);
 
   try {
-    const orders = await sanityFetch({
-      query: MY_ORDERS_QUERY,
-      params: { userId },
-    });
-    return orders?.data || [];
+    return await backendClient.fetch(MY_ORDERS_QUERY, { userId });
   } catch (error) {
     console.error("Error fetching orders:", error);
     return [];

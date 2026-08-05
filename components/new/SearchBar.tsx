@@ -2,7 +2,6 @@
 import { Loader2, Search, X } from "lucide-react";
 import React, { useCallback, useEffect, useState } from "react";
 import {Dialog, DialogContent, DialogHeader, DialogTitle,DialogTrigger,} from "../ui/dialog";
-import { client } from "@/sanity/lib/client";
 import { Input } from "../ui/input";
 import AddToCartButton from "../AddToCartButton";
 import { urlFor } from "@/sanity/lib/image";
@@ -26,10 +25,9 @@ const SearchBar = () => {
 
     setLoading(true);
     try {
-      const query = `*[_type == "product" && name match $search] | order(name asc)`;
-      const params = { search: `${search}*` };
-      const response = await client.fetch(query, params);
-      setProducts(response);
+      const response = await fetch(`/api/catalog?search=${encodeURIComponent(search)}`);
+      if (!response.ok) throw new Error("No se pudo completar la búsqueda");
+      setProducts(await response.json());
     } catch (error) {
       console.error("Error fetching products:", error);
     } finally {

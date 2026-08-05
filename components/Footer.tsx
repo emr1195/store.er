@@ -1,8 +1,5 @@
-import Link from "next/link";
 import Logo from "./new/Logo";
-import FooterTop from "./new/FooterTop";
 import SocialMedia from "./new/SocialMedia";
-import { categoriesData, quickLinksData } from "@/constants";
 
 const Footer = () => {
   return (
@@ -15,7 +12,7 @@ const Footer = () => {
           <div className="space-y-4 text-center">
            
             <div className="flex justify-center">
-              <Logo children={undefined} />
+              <Logo />
             </div>
 
             <p className="text-gray-600 text-sm">

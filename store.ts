@@ -29,6 +29,9 @@ const useCartStore = create<CartState>()(
             (item) => item.product._id === product._id
           );
           if (existingItem) {
+            if (product.stock !== undefined && existingItem.quantity >= product.stock) {
+              return state;
+            }
             return {
               items: state.items.map((item) =>
                 item.product._id === product._id
@@ -70,7 +73,7 @@ const useCartStore = create<CartState>()(
         return get().items.reduce((total, item) => {
           const price = item.product.price ?? 0;
           const discount = ((item.product.discount ?? 0) * price) / 100;
-          const discountedPrice = price + discount;
+          const discountedPrice = price - discount;
           return total + discountedPrice * item.quantity;
         }, 0);
       },

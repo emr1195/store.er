@@ -1,16 +1,15 @@
 "use client";
-import { CATEGORIES_QUERYResult, Category } from "@/sanity.types";
 import Link from "next/link";
 import Logo from "./Logo";
 import { usePathname } from "next/navigation";
 
-const HeaderMenu = ({ categories }: { categories: CATEGORIES_QUERYResult }) => {
+const HeaderMenu = () => {
   const pathname = usePathname();
 
   return (
     <div className="hidden md:inline-flex w-1/3 items-center gap-5 text-sm capitalize font-semibold text-lightColor">
       <Link href={""}>
-        <Logo children={undefined} />
+        <Logo />
       </Link>
       
       <Link

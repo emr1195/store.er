@@ -16,6 +16,7 @@ const QuantityButtons = ({ product, className, borderStyle }: Props) => {
   const { addItem, removeItem, getItemCount } = useCartStore();
   const itemCount = getItemCount(product?._id);
   const isOutOfStock = product?.stock === 0;
+  const reachedStockLimit = product.stock !== undefined && itemCount >= product.stock;
 
   const handleRemoveProduct = () => {
     removeItem(product?._id);
@@ -53,7 +54,7 @@ const QuantityButtons = ({ product, className, borderStyle }: Props) => {
           addItem(product);
           toast.success("Quantity increased successfully!");
         }}
-        disabled={isOutOfStock}
+        disabled={isOutOfStock || reachedStockLimit}
       >
         <HiPlus />
       </Button>

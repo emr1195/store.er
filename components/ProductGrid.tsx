@@ -3,11 +3,9 @@ import { PRODUCTS_QUERYResult } from "@/sanity.types";
 import React, { useEffect, useState } from "react";
 import ProductCard from "./ProductCard";
 import { motion, AnimatePresence } from "motion/react";
-import { client } from "@/sanity/lib/client";
 import HomeTabbar from "./new/HomeTabbar";
 import NoProductAvailable from "./new/NoProductAvailable";
 import { Loader2 } from "lucide-react";
-import { productType } from "@/constants";
 
 const ProductGrid = () => {
   const [products, setProducts] = useState<PRODUCTS_QUERYResult>([]);
@@ -16,19 +14,15 @@ const ProductGrid = () => {
   
 
   
-  const query = `
-    *[_type == "product" ${selectedTab ? '&& variant == $variant' : ''}]
-    | order(_createdAt asc)
-  `;
-  const params = selectedTab ? { variant: selectedTab.toLowerCase() } : {};
-
   useEffect(() => {
-    console.log(selectedTab)
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await client.fetch(query, params);
-        setProducts( response);
+        const params = new URLSearchParams();
+        if (selectedTab) params.set("variant", selectedTab.toLowerCase());
+        const response = await fetch(`/api/catalog?${params}`);
+        if (!response.ok) throw new Error("No se pudo cargar el catálogo");
+        setProducts(await response.json());
       } catch (error) {
         console.log("Product fetching Error", error);
       } finally {
@@ -40,7 +34,7 @@ const ProductGrid = () => {
 
   return (
     <div className="mt-10 flex flex-col items-center">
-      <HomeTabbar selectedTab={selectedTab} onTabSelect={setSelectedTab} />
+      <HomeTabbar selectedTab={selectedTab} onTabSelect={(tab) => setSelectedTab(tab ?? "")} />
       {loading ? (
         <div className="flex flex-col items-center justify-center py-10 min-h-80 space-y-4 text-center bg-gray-100 rounded-lg w-full mt-10">
           <motion.div className="flex items-center space-x-2 text-blue-600">

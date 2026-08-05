@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { urlFor } from "@/sanity/lib/image";
 import useCartStore from "@/store";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useAuth } from "@clerk/nextjs";
 import { Heart, ShoppingBag, Trash } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -14,7 +14,8 @@ import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import EmptyCart from "@/components/EmptyCart";
 import NoAccessToCart from "@/components/NoAccessToCart";
-import { createCheckoutSession, Metadata } from "@/actions/createCheckoutSession";
+import { createCheckoutSession } from "@/actions/createCheckoutSession";
+import { calculatePricing, centsToDollars, dollarsToCents } from "@/lib/pricing";
 import paypalLogo from "@/images/paypalLogo.png";
 import {Tooltip,TooltipContent,TooltipProvider,TooltipTrigger,} from "@/components/ui/tooltip";
 import Loading from "@/components/Loading";
@@ -22,16 +23,13 @@ import Loading from "@/components/Loading";
 const CartPage = () => {
   const {
     deleteCartProduct,
-    getTotalPrice,
     getItemCount,
-    getSubTotalPrice,
     resetCart,
   } = useCartStore();
   const [isClient, setIsClient] = useState(false);
   const [loading, setLoading] = useState(false);
   const groupedItems = useCartStore((state) => state.getGroupedItems());
   const { isSignedIn } = useAuth();
-  const { user } = useUser();
 
   useEffect(() => {
     setIsClient(true);
@@ -51,18 +49,19 @@ const CartPage = () => {
   const handleCheckout = async () => {
     setLoading(true);
     try {
-      const metadata: Metadata = {
-        orderNumber: crypto.randomUUID(),
-        customerName: user?.fullName ?? "Unknown",
-        customerEmail: user?.emailAddresses[0]?.emailAddress ?? "Unknown",
-        clerkUserId: user!.id,
-      };
-      const checkoutUrl = await createCheckoutSession(groupedItems, metadata);
+      const checkoutUrl = await createCheckoutSession({
+        items: groupedItems.map(({ product, quantity }) => ({
+          productId: product._id,
+          quantity,
+        })),
+        deliveryMethod: "standard",
+      });
       if (checkoutUrl) {
         window.location.href = checkoutUrl;
       }
     } catch (error) {
       console.error("Error creating checkout session:", error);
+      toast.error(error instanceof Error ? error.message : "No se pudo iniciar el pago");
     } finally {
       setLoading(false);
     }
@@ -90,10 +89,20 @@ const CartPage = () => {
     sold: "Vendido",
   };
 
-  const subTotal = getSubTotalPrice();
-  const shipping = subTotal - getTotalPrice();
-  const itbms = subTotal * 0.07;
-  const total = getTotalPrice() + itbms;
+  const preview = groupedItems.length ? calculatePricing(
+    groupedItems.map(({ product, quantity }) => ({
+      productId: product._id,
+      unitPriceCents: dollarsToCents(product.price ?? 0),
+      quantity,
+      discountPercent: product.discount ?? 0,
+    })),
+    { shippingCents: Number(process.env.NEXT_PUBLIC_STANDARD_SHIPPING_CENTS ?? "0") }
+  ) : { subtotalCents: 0, discountCents: 0, shippingCents: 0, itbmsCents: 0, totalCents: 0 };
+  const subTotal = centsToDollars(preview.subtotalCents);
+  const discount = centsToDollars(preview.discountCents);
+  const shipping = centsToDollars(preview.shippingCents);
+  const itbms = centsToDollars(preview.itbmsCents);
+  const total = centsToDollars(preview.totalCents);
 
   return (
     <div className="bg-gray-50 pb-52 md:pb-10">
@@ -139,7 +148,7 @@ const CartPage = () => {
                                 <p className="text-sm capitalize">
                                   Categoria:{" "}
                                   <span className="font-semibold">
-                                    {variantTitles[product?.variant] ?? "Desconocido"}
+                                    {product?.variant ? variantTitles[product.variant] ?? "Desconocido" : "Desconocido"}
                                   </span>
                                 </p>
                                 <p className="text-sm capitalize">
@@ -210,6 +219,7 @@ const CartPage = () => {
                         <span>ITBMS</span>
                         <PriceFormatter amount={itbms} />
                       </div>
+                      {discount > 0 && <div className="flex justify-between text-green-700"><span>Descuento</span><PriceFormatter amount={-discount} /></div>}
                       <div className="flex justify-between">
                         <span>Envio</span>
                         <PriceFormatter amount={shipping} />
@@ -249,6 +259,7 @@ const CartPage = () => {
                         <span>ITBMS</span>
                         <PriceFormatter amount={itbms} />
                       </div>
+                      {discount > 0 && <div className="flex justify-between text-green-700"><span>Descuento</span><PriceFormatter amount={-discount} /></div>}
                       <div className="flex justify-between">
                         <span>Envio</span>
                         <PriceFormatter amount={shipping} />

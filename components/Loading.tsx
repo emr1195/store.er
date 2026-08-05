@@ -8,7 +8,7 @@ const Loading = () => {
     <div className="fixed min-h-screen w-full bg-white left-0 top-0 flex items-center justify-center">
       <div className="flex flex-col justify-center items-center gap-1">
         <div className="flex justify-center">
-              <Logo children={undefined} />
+              <Logo />
         </div>
         <motion.div
           animate={{ scale: [1, 1.1, 1] }}

@@ -6,7 +6,7 @@ import { MY_ORDERS_QUERYResult } from "@/sanity.types";
 import OrderDetailsDialog from "./OrderDetailsDialog";
 import {Tooltip,TooltipContent,TooltipProvider,TooltipTrigger,} from "./ui/tooltip";
 import { format } from "date-fns";
-import { Trash } from "lucide-react";
+import { Ban } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
@@ -32,7 +32,7 @@ const OrdersComponent = ({ orders }: { orders: MY_ORDERS_QUERYResult }) => {
 
     if (
       !confirm(
-        "Seguro que deseas eliminar este pedido? ."
+        "¿Seguro que deseas cancelar este pedido? El inventario reservado será liberado."
       )
     ) {
       return;
@@ -56,7 +56,7 @@ const OrdersComponent = ({ orders }: { orders: MY_ORDERS_QUERYResult }) => {
 
       
 
-      toast.success("Pedido Eliminado");
+      toast.success("Pedido cancelado");
 
      
       refreshOrders();
@@ -123,19 +123,18 @@ const OrdersComponent = ({ orders }: { orders: MY_ORDERS_QUERYResult }) => {
                     )}
                   </TableCell>
                   <TableCell>
-                    {/* Delete button */}
-                    <button
+                    {(order.status === "pending" || (order.status as string) === "payment_pending") && <button
                       onClick={(e) => handleDeleteOrder(order._id, e)}
                       className="ml-2 text-red-500 hover:text-red-700 cursor-pointer transition-colors"
                       disabled={isDeleting === order._id}
-                      aria-label="Borrar Orden"
+                      aria-label="Cancelar pedido"
                     >
                       {isDeleting === order._id ? (
                         <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
                       ) : (
-                        <Trash size={18} />
+                        <Ban size={18} />
                       )}
-                    </button>
+                    </button>}
                   </TableCell>
                 </TableRow>
               </TooltipTrigger>

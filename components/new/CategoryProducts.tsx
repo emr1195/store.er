@@ -2,7 +2,6 @@
 import { CATEGORIES_QUERYResult, Product } from "@/sanity.types";
 import { Button } from "../ui/button";
 import { useEffect, useState } from "react";
-import { client } from "@/sanity/lib/client";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2 } from "lucide-react";
 import ProductCard from "../ProductCard";
@@ -21,12 +20,9 @@ const CategoryProducts = ({ categories, slug }: Props) => {
   const fetchProducts = async (categorySlug: string) => {
     try {
       setLoading(true);
-      const query = `
-        *[_type == 'product' && references(*[_type == "category" && slug.current == $categorySlug]._id)] | order(name asc)
-      `;
-
-      const data = await client.fetch(query, { categorySlug });
-      setProducts(data);
+      const response = await fetch(`/api/catalog?category=${encodeURIComponent(categorySlug)}`);
+      if (!response.ok) throw new Error("No se pudo cargar la categoría");
+      setProducts(await response.json());
     } catch (error) {
       console.error("Error fetching products:", error);
       setProducts([]);

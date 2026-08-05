@@ -3,7 +3,7 @@ import {Card, CardContent, CardDescription, CardFooter,CardHeader,CardTitle,} fr
 import { Separator } from "@/components/ui/separator";
 import { SignInButton } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
-import { Github, Mail } from "lucide-react";
+import { Mail } from "lucide-react";
 import { redirect } from "next/navigation";
 import React from "react";
 

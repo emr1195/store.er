@@ -2,7 +2,6 @@
 import { PRODUCTS_QUERYResult } from "@/sanity.types";
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { client } from "@/sanity/lib/client";
 import ProductCard from "@/components/ProductCard";
 import Container from "@/components/Container";
 import Loading from "@/components/Loading";
@@ -11,14 +10,13 @@ const DealsSection = () => {
   const [products, setProducts] = useState<PRODUCTS_QUERYResult>([]);
   const [loading, setLoading] = useState(false);
 
-  const query = `*[_type == "product"] | order(name asc)`;
-
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await client.fetch(query);
-        setProducts(await response);
+        const response = await fetch("/api/catalog");
+        if (!response.ok) throw new Error("No se pudo cargar el catálogo");
+        setProducts(await response.json());
       } catch (error) {
         console.log("Product fetching Error", error);
       } finally {

@@ -63,6 +63,23 @@ export const productType = defineType({
       type: "number",
       validation: (Rule) => Rule.min(0),
     }),
+    defineField({
+      name: "sku",
+      title: "SKU",
+      type: "string",
+    }),
+    defineField({
+      name: "isActive",
+      title: "Active",
+      type: "boolean",
+      initialValue: true,
+    }),
+    defineField({
+      name: "taxable",
+      title: "Subject to ITBMS",
+      type: "boolean",
+      initialValue: true,
+    }),
 
     defineField({
       name: "status",
