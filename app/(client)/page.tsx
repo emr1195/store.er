@@ -8,10 +8,10 @@ export default function Home() {
   return (
     <main>
       <HomeBanner />
-      <StoreBenefits />
       <Container className="py-12 sm:py-16">
         <ProductGrid />
       </Container>
+      <StoreBenefits />
       <StoreInformation />
     </main>
   );
