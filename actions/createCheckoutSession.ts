@@ -4,7 +4,13 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import stripe from "@/lib/stripe";
 import { logger } from "@/lib/logger";
-import { StockChangedError, type CheckoutResult, type InventoryAvailability } from "@/lib/checkout";
+import {
+  getSafeErrorDetails,
+  StockChangedError,
+  type CheckoutResult,
+  type CheckoutStage,
+  type InventoryAvailability,
+} from "@/lib/checkout";
 import { calculatePricing, centsToDollars, dollarsToCents, STORE_CURRENCY } from "@/lib/pricing";
 import { backendClient } from "@/sanity/lib/backendClient";
 
@@ -59,20 +65,27 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
 
   const attemptId = parsed.data.attemptId ?? crypto.randomUUID();
   const orderId = `order.${attemptId}`;
+  let stage: CheckoutStage = "initializing";
+
+  logger.info("checkout_started", { orderId, userId, stage });
 
   try {
+    stage = "loading_existing_checkout";
     const existing = await getExistingCheckout(orderId);
     if (existing) return reuseExistingCheckout(existing, userId);
 
+    stage = "loading_user";
     const user = await currentUser();
     const email = user?.primaryEmailAddress?.emailAddress;
     if (!user || !email) return failure("UNAUTHORIZED", "Tu cuenta no tiene un correo válido.");
 
+    stage = "loading_cart";
     const quantities = new Map<string, number>();
     for (const item of parsed.data.items) {
       quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
     }
 
+    stage = "validating_cart";
     const productIds = [...quantities.keys()];
     const products = await fetchProducts(productIds);
     if (products.length !== productIds.length) {
@@ -89,12 +102,17 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
       if (product.price === undefined || !Number.isFinite(product.price) || product.price < 0) {
         return failure("INVALID_CART", "Uno de los productos no tiene un precio válido.");
       }
+      if (product.discount !== undefined && (!Number.isFinite(product.discount) || product.discount < 0 || product.discount > 100)) {
+        return failure("INVALID_CART", "Uno de los productos tiene un descuento inválido.");
+      }
+      stage = "validating_stock";
       const availableQuantity = Number.isSafeInteger(product.stock) ? Math.max(0, product.stock ?? 0) : 0;
       if (availableQuantity < quantity) inventoryConflicts.push({ productId, availableQuantity });
     }
     if (inventoryConflicts.length > 0) throw new StockChangedError(inventoryConflicts);
 
-    logger.info("checkout_stock_validated", { orderId, userId, productCount: products.length });
+    logger.info("checkout_stock_validated", { orderId, userId, stage, productCount: products.length });
+    stage = "calculating_totals";
     const shippingCents = parseShippingCents();
     const pricing = calculatePricing(
       products.map((product) => ({
@@ -107,6 +125,7 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
       { shippingCents, currency: STORE_CURRENCY }
     );
 
+    stage = "creating_order";
     const now = new Date().toISOString();
     const orderProducts = pricing.lines.map((line) => {
       const product = productById.get(line.productId)!;
@@ -126,6 +145,7 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
       };
     });
 
+    assertSanityWriteTokenConfigured();
     let reservation = backendClient.transaction().create({
       _id: orderId,
       _type: "order",
@@ -166,9 +186,13 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
         });
     }
 
+    stage = "reserving_inventory";
+    logger.info("checkout_reservation_started", { orderId, userId, stage, productCount: products.length });
     try {
       await reservation.commit();
-    } catch (error) {
+    } catch (error: unknown) {
+      const errorDetails = getSafeErrorDetails(error);
+      logger.error("checkout_reservation_failed", { orderId, userId, stage, ...errorDetails });
       if (!isSanityConflict(error)) throw error;
       const concurrentOrder = await getExistingCheckout(orderId);
       if (concurrentOrder) return reuseExistingCheckout(concurrentOrder, userId);
@@ -176,11 +200,13 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
       throw new StockChangedError(inventory);
     }
 
-    logger.info("checkout_reservation_succeeded", { orderId, userId, productCount: products.length });
-    logger.info("checkout_started", { orderId, userId, totalCents: pricing.totalCents });
+    logger.info("checkout_reservation_succeeded", { orderId, userId, stage, productCount: products.length });
+    logger.info("checkout_order_created", { orderId, userId, stage, totalCents: pricing.totalCents });
 
     let session;
     try {
+      stage = "creating_payment_session";
+      logger.info("checkout_payment_session_started", { orderId, userId, stage, provider: "stripe" });
       const customers = await stripe.customers.list({ email, limit: 1 });
       const customerId = customers.data[0]?.id;
       const lineItems = pricing.lines.map((line) => {
@@ -234,25 +260,55 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
       }, { idempotencyKey: `checkout:${orderId}` });
 
       if (!session.url) throw new Error("STRIPE_CHECKOUT_URL_MISSING");
+      logger.info("checkout_payment_session_created", {
+        orderId,
+        userId,
+        stage,
+        provider: "stripe",
+        paymentSessionId: session.id,
+      });
+      stage = "updating_order";
       try {
         await backendClient.patch(orderId).set({
           stripeCheckoutSessionId: session.id,
           stripeCustomerId: typeof session.customer === "string" ? session.customer : customerId ?? "guest",
           status: "payment_pending",
         }).commit();
-      } catch {
-        logger.warn("checkout_order_session_link_failed", { orderId, sessionId: session.id });
+        logger.info("checkout_order_updated", { orderId, userId, stage, provider: "stripe" });
+      } catch (error: unknown) {
+        logger.error("checkout_order_session_link_failed", {
+          orderId,
+          userId,
+          stage,
+          provider: "stripe",
+          paymentSessionId: session.id,
+          ...getSafeErrorDetails(error),
+        });
       }
-      logger.info("checkout_payment_session_created", { orderId, sessionId: session.id });
+      stage = "completed";
+      logger.info("checkout_completed", { orderId, userId, stage, provider: "stripe" });
       return { success: true, checkoutUrl: session.url, orderId };
-    } catch {
+    } catch (error: unknown) {
+      const failedStage = stage;
+      logger.error("checkout_payment_session_failed", {
+        orderId,
+        userId,
+        stage: failedStage,
+        provider: "stripe",
+        ...getSafeErrorDetails(error),
+      });
       try {
+        stage = "releasing_inventory";
         await releaseReservation(orderId, attemptId, products, quantities);
-      } catch {
-        logger.error("inventory_reservation_release_failed", { orderId });
+      } catch (releaseError: unknown) {
+        logger.error("inventory_reservation_release_failed", {
+          orderId,
+          userId,
+          stage,
+          ...getSafeErrorDetails(releaseError),
+        });
       }
-      logger.error("checkout_payment_session_failed", { orderId });
-      return failure("CHECKOUT_FAILED", "No pudimos iniciar el pago. Inténtalo nuevamente en unos momentos.");
+      return failure("PAYMENT_PROVIDER_ERROR", "No pudimos comunicarnos con el proveedor de pago. Inténtalo nuevamente en unos momentos.");
     }
   } catch (error) {
     if (error instanceof StockChangedError) {
@@ -264,7 +320,12 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
         inventory: error.inventory,
       };
     }
-    logger.error("checkout_unexpected_error", { orderId, userId });
+    logger.error("checkout_unexpected_error", {
+      orderId,
+      userId,
+      stage,
+      ...getSafeErrorDetails(error),
+    });
     return failure("CHECKOUT_FAILED", "No pudimos iniciar el pago. Inténtalo nuevamente en unos momentos.");
   }
 }
@@ -371,7 +432,7 @@ function toQuantityMap(items: Array<{ productId: string; quantity: number }>): M
   return quantities;
 }
 
-function failure(code: "EMPTY_CART" | "INVALID_CART" | "UNAUTHORIZED" | "CHECKOUT_IN_PROGRESS" | "CHECKOUT_FAILED", message: string): CheckoutResult {
+function failure(code: "EMPTY_CART" | "INVALID_CART" | "UNAUTHORIZED" | "CHECKOUT_IN_PROGRESS" | "PAYMENT_PROVIDER_ERROR" | "CHECKOUT_FAILED", message: string): CheckoutResult {
   return { success: false, code, message };
 }
 
@@ -387,6 +448,14 @@ function parseShippingCents(): number {
   const value = Number(process.env.NEXT_PUBLIC_STANDARD_SHIPPING_CENTS ?? "0");
   if (!Number.isSafeInteger(value) || value < 0) throw new Error("STANDARD_SHIPPING_CENTS no es válido");
   return value;
+}
+
+function assertSanityWriteTokenConfigured(): void {
+  if (process.env.SANITY_API_TOKEN) return;
+  const error = new Error("SANITY_API_TOKEN no está configurado para operaciones de escritura") as Error & { code: string };
+  error.name = "CheckoutConfigurationError";
+  error.code = "SANITY_WRITE_TOKEN_MISSING";
+  throw error;
 }
 
 function getBaseUrl(): string {
