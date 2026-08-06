@@ -211,13 +211,14 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
       const customerId = customers.data[0]?.id;
       const lineItems = pricing.lines.map((line) => {
         const product = productById.get(line.productId)!;
+        const description = normalizeOptionalText(product.description);
         return {
           price_data: {
             currency: pricing.currency,
             unit_amount: line.taxBaseCents,
             product_data: {
               name: `${product.name ?? "Producto"} × ${line.quantity}`,
-              description: product.description,
+              ...(description ? { description } : {}),
               metadata: { productId: product._id },
             },
           },
@@ -442,6 +443,11 @@ function isSanityConflict(error: unknown): boolean {
 
 function safeId(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function normalizeOptionalText(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
 }
 
 function parseShippingCents(): number {

@@ -89,6 +89,25 @@ describe("createCheckoutSession", () => {
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });
 
+  it("omite descripciones vacías del payload enviado a Stripe", async () => {
+    mocks.products[0].description = "   ";
+
+    const result = await createCheckoutSession(request());
+
+    expect(result).toMatchObject({ success: true });
+    const payload = mocks.sessionCreate.mock.calls[0][0];
+    expect(payload.line_items[0].price_data.product_data).not.toHaveProperty("description");
+  });
+
+  it("normaliza una descripción válida antes de enviarla a Stripe", async () => {
+    mocks.products[0].description = "  Producto oficial  ";
+
+    await createCheckoutSession(request());
+
+    const payload = mocks.sessionCreate.mock.calls[0][0];
+    expect(payload.line_items[0].price_data.product_data.description).toBe("Producto oficial");
+  });
+
   it("devuelve STOCK_CHANGED con el stock real cuando es insuficiente", async () => {
     const result = await createCheckoutSession(request(6));
     expect(result).toMatchObject({ success: false, code: "STOCK_CHANGED", inventory: [{ productId: "p1", availableQuantity: 5 }] });
