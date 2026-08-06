@@ -119,6 +119,7 @@ export const orderType = defineType({
     defineField({ name: "totalCents", type: "number" }),
     defineField({ name: "refundedCents", type: "number" }),
     defineField({ name: "inventoryReserved", type: "boolean" }),
+    defineField({ name: "checkoutAttemptId", type: "string" }),
     defineField({ name: "cancelledAt", type: "datetime" }),
     defineField({
       name: "currency",

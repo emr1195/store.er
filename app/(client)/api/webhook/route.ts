@@ -157,6 +157,7 @@ async function handleSessionCancelled(event: Stripe.Event, session: Stripe.Check
     targetStatus: event.type === "checkout.session.async_payment_failed" ? "payment_failed" : "cancelled",
   });
   logger.info("inventory_released", { orderId, eventId: event.id });
+  logger.info("inventory_reservation_released", { orderId, eventId: event.id });
 }
 
 async function handleChargeRefunded(event: Stripe.Event, charge: Stripe.Charge) {

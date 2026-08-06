@@ -7,11 +7,24 @@ export interface CartItem {
   quantity: number;
 }
 
+export function reconcileCartItemStock(items: CartItem[], productId: string, availableQuantity: number): CartItem[] {
+  return items.map((item) =>
+    item.product._id === productId
+      ? {
+          ...item,
+          quantity: availableQuantity > 0 ? Math.min(item.quantity, availableQuantity) : item.quantity,
+          product: { ...item.product, stock: Math.max(0, availableQuantity) },
+        }
+      : item
+  );
+}
+
 interface CartState {
   items: CartItem[];
   addItem: (product: Product, quantity?: number) => void;
   removeItem: (productId: string) => void;
   deleteCartProduct: (productId: string) => void;
+  reconcileItemStock: (productId: string, availableQuantity: number) => void;
   resetCart: () => void;
   getTotalPrice: () => number;
   getSubTotalPrice: () => number;
@@ -69,6 +82,10 @@ const useCartStore = create<CartState>()(
           items: state.items.filter(
             ({ product }) => product?._id !== productId
           ),
+        })),
+      reconcileItemStock: (productId, availableQuantity) =>
+        set((state) => ({
+          items: reconcileCartItemStock(state.items, productId, availableQuantity),
         })),
       resetCart: () => set({ items: [] }),
       getTotalPrice: () => {
