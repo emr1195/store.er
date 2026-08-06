@@ -7,6 +7,41 @@ export interface CartItem {
   quantity: number;
 }
 
+export type PurchasedCartItem = {
+  productId: string;
+  quantity: number;
+};
+
+export function removePurchasedCartItems(items: CartItem[], purchasedItems: PurchasedCartItem[]): CartItem[] {
+  const purchasedByProduct = new Map<string, number>();
+  for (const item of purchasedItems) {
+    if (!item.productId || !Number.isSafeInteger(item.quantity) || item.quantity <= 0) continue;
+    purchasedByProduct.set(item.productId, (purchasedByProduct.get(item.productId) ?? 0) + item.quantity);
+  }
+
+  return items.flatMap((item) => {
+    const purchasedQuantity = purchasedByProduct.get(item.product._id) ?? 0;
+    const remainingQuantity = item.quantity - purchasedQuantity;
+    return remainingQuantity > 0 ? [{ ...item, quantity: remainingQuantity }] : [];
+  });
+}
+
+export function completeCheckoutInCart(
+  state: { items: CartItem[]; completedCheckoutIds?: string[] },
+  checkoutId: string,
+  purchasedItems: PurchasedCartItem[]
+): { items: CartItem[]; completedCheckoutIds: string[] } {
+  const completedCheckoutIds = state.completedCheckoutIds ?? [];
+  if (completedCheckoutIds.includes(checkoutId)) {
+    return { items: state.items, completedCheckoutIds };
+  }
+
+  return {
+    items: removePurchasedCartItems(state.items, purchasedItems),
+    completedCheckoutIds: [...completedCheckoutIds, checkoutId].slice(-50),
+  };
+}
+
 export function reconcileCartItemStock(items: CartItem[], productId: string, availableQuantity: number): CartItem[] {
   return items.map((item) =>
     item.product._id === productId
@@ -21,10 +56,12 @@ export function reconcileCartItemStock(items: CartItem[], productId: string, ava
 
 interface CartState {
   items: CartItem[];
+  completedCheckoutIds: string[];
   addItem: (product: Product, quantity?: number) => void;
   removeItem: (productId: string) => void;
   deleteCartProduct: (productId: string) => void;
   reconcileItemStock: (productId: string, availableQuantity: number) => void;
+  removePurchasedItems: (checkoutId: string, items: PurchasedCartItem[]) => void;
   resetCart: () => void;
   getTotalPrice: () => number;
   getSubTotalPrice: () => number;
@@ -36,6 +73,7 @@ const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
+      completedCheckoutIds: [],
       addItem: (product, quantity = 1) =>
         set((state) => {
           const requestedQuantity = Math.max(1, Math.floor(quantity));
@@ -87,6 +125,8 @@ const useCartStore = create<CartState>()(
         set((state) => ({
           items: reconcileCartItemStock(state.items, productId, availableQuantity),
         })),
+      removePurchasedItems: (checkoutId, purchasedItems) =>
+        set((state) => completeCheckoutInCart(state, checkoutId, purchasedItems)),
       resetCart: () => set({ items: [] }),
       getTotalPrice: () => {
         return get().items.reduce(
