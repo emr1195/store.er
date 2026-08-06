@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { ShoppingBag } from "lucide-react";
 import toast from "react-hot-toast";
@@ -15,6 +16,7 @@ import ClearCartButton from "@/components/cart/ClearCartButton";
 import OrderSummary from "@/components/cart/OrderSummary";
 import PriceFormatter from "@/components/PriceFormatter";
 import { createCheckoutSession } from "@/actions/createCheckoutSession";
+import type { CheckoutFailureCode } from "@/lib/checkout";
 import { calculatePricing, centsToDollars, dollarsToCents, STORE_CURRENCY, type PricingResult } from "@/lib/pricing";
 import useCartStore from "@/store";
 
@@ -34,11 +36,15 @@ const EMPTY_PRICING: PricingResult = {
 export default function CartPage() {
   const groupedItems = useCartStore((state) => state.items);
   const deleteCartProduct = useCartStore((state) => state.deleteCartProduct);
+  const reconcileItemStock = useCartStore((state) => state.reconcileItemStock);
   const resetCart = useCartStore((state) => state.resetCart);
   const { isLoaded, isSignedIn } = useAuth();
+  const router = useRouter();
+  const checkoutAttempt = useRef<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
+  const [checkoutErrorCode, setCheckoutErrorCode] = useState<CheckoutFailureCode | null>(null);
 
   useEffect(() => setMounted(true), []);
 
@@ -72,16 +78,39 @@ export default function CartPage() {
     if (checkoutLoading || checkoutDisabled) return;
     setCheckoutLoading(true);
     setCheckoutError("");
+    setCheckoutErrorCode(null);
+    checkoutAttempt.current ??= crypto.randomUUID();
     try {
-      const checkoutUrl = await createCheckoutSession({
+      const result = await createCheckoutSession({
         items: groupedItems.map(({ product, quantity }) => ({ productId: product._id, quantity })),
         deliveryMethod: "standard",
+        attemptId: checkoutAttempt.current,
       });
-      window.location.assign(checkoutUrl);
-    } catch (error) {
-      console.error("Error creating checkout session:", error);
-      const message = error instanceof Error ? error.message : "No se pudo iniciar el pago";
+      if (!result.success) {
+        setCheckoutError(result.message);
+        setCheckoutErrorCode(result.code);
+        if (result.code === "STOCK_CHANGED") {
+          for (const item of result.inventory ?? []) {
+            reconcileItemStock(item.productId, item.availableQuantity);
+            toast.error(item.availableQuantity > 0
+              ? `Solo quedan ${item.availableQuantity} ${item.availableQuantity === 1 ? "unidad disponible" : "unidades disponibles"}. Actualizamos tu carrito.`
+              : "Un producto ya no está disponible y debe eliminarse del carrito.");
+          }
+          checkoutAttempt.current = null;
+          router.refresh();
+        } else if (result.code !== "CHECKOUT_IN_PROGRESS") {
+          checkoutAttempt.current = null;
+        }
+        setCheckoutLoading(false);
+        return;
+      }
+      window.location.assign(result.checkoutUrl);
+    } catch {
+      console.error("Checkout action failed unexpectedly");
+      const message = "No pudimos iniciar el pago. Inténtalo nuevamente en unos momentos.";
       setCheckoutError(message);
+      setCheckoutErrorCode("CHECKOUT_FAILED");
+      checkoutAttempt.current = null;
       toast.error(message);
       setCheckoutLoading(false);
     }
@@ -109,7 +138,7 @@ export default function CartPage() {
         </header>
 
         {(pricingError || inventoryError || catalogError || checkoutError) && (
-          <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
+          <div role="alert" className={`mb-5 rounded-xl border px-4 py-3 text-sm font-semibold ${checkoutErrorCode === "STOCK_CHANGED" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-red-200 bg-red-50 text-red-800"}`}>
             {checkoutError || pricingError || (catalogError ? "Uno o más productos necesitan actualizar su información antes de continuar." : "Uno o más productos no tienen inventario suficiente. Ajusta la cantidad antes de continuar.")}
           </div>
         )}

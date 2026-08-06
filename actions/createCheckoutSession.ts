@@ -4,12 +4,8 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import stripe from "@/lib/stripe";
 import { logger } from "@/lib/logger";
-import {
-  calculatePricing,
-  centsToDollars,
-  dollarsToCents,
-  STORE_CURRENCY,
-} from "@/lib/pricing";
+import { StockChangedError, type CheckoutResult, type InventoryAvailability } from "@/lib/checkout";
+import { calculatePricing, centsToDollars, dollarsToCents, STORE_CURRENCY } from "@/lib/pricing";
 import { backendClient } from "@/sanity/lib/backendClient";
 
 const checkoutSchema = z.object({
@@ -19,6 +15,7 @@ const checkoutSchema = z.object({
   })).min(1).max(50),
   discountCode: z.string().trim().max(50).optional(),
   deliveryMethod: z.enum(["standard"]).default("standard"),
+  attemptId: z.string().uuid().optional(),
 });
 
 export type CheckoutRequest = z.input<typeof checkoutSchema>;
@@ -37,198 +34,294 @@ type CatalogProduct = {
   isActive?: boolean;
 };
 
-export async function createCheckoutSession(input: CheckoutRequest): Promise<string> {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Debes iniciar sesión para pagar");
+type ExistingCheckoutOrder = {
+  _id: string;
+  clerkUserId?: string;
+  status?: string;
+  stripeCheckoutSessionId?: string;
+};
 
+type ReleasableOrder = {
+  _rev: string;
+  inventoryReserved?: boolean;
+};
+
+export async function createCheckoutSession(input: CheckoutRequest): Promise<CheckoutResult> {
   const parsed = checkoutSchema.safeParse(input);
-  if (!parsed.success) throw new Error("El carrito contiene datos inválidos");
-  if (parsed.data.discountCode) {
-    throw new Error("El código de descuento no es válido o no está disponible");
+  if (!parsed.success) {
+    const emptyCart = Array.isArray(input?.items) && input.items.length === 0;
+    return failure(emptyCart ? "EMPTY_CART" : "INVALID_CART", emptyCart ? "Tu carrito está vacío." : "El carrito contiene datos inválidos.");
   }
+  if (parsed.data.discountCode) return failure("INVALID_CART", "El código de descuento no es válido o no está disponible.");
 
-  const user = await currentUser();
-  const email = user?.primaryEmailAddress?.emailAddress;
-  if (!user || !email) throw new Error("Tu cuenta no tiene un correo válido");
+  const { userId } = await auth();
+  if (!userId) return failure("UNAUTHORIZED", "Debes iniciar sesión para pagar.");
 
-  const quantities = new Map<string, number>();
-  for (const item of parsed.data.items) {
-    quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
-  }
+  const attemptId = parsed.data.attemptId ?? crypto.randomUUID();
+  const orderId = `order.${attemptId}`;
 
-  const productIds = [...quantities.keys()];
-  const products = await backendClient.fetch<CatalogProduct[]>(
-    `*[_type == "product" && _id in $ids]{_id,_rev,name,description,sku,variant,price,discount,stock,taxable,isActive}`,
-    { ids: productIds }
-  );
-  if (products.length !== productIds.length) throw new Error("Uno o más productos ya no existen");
+  try {
+    const existing = await getExistingCheckout(orderId);
+    if (existing) return reuseExistingCheckout(existing, userId);
 
-  const productById = new Map(products.map((product) => [product._id, product]));
-  for (const [productId, quantity] of quantities) {
-    const product = productById.get(productId);
-    if (!product || product.isActive === false) throw new Error("Un producto ya no está disponible");
-    if (product.price === undefined) throw new Error("Un producto no tiene precio válido");
-    if (!Number.isSafeInteger(product.stock) || (product.stock ?? 0) < quantity) {
-      throw new Error(`Stock insuficiente para ${product.name ?? "un producto"}`);
+    const user = await currentUser();
+    const email = user?.primaryEmailAddress?.emailAddress;
+    if (!user || !email) return failure("UNAUTHORIZED", "Tu cuenta no tiene un correo válido.");
+
+    const quantities = new Map<string, number>();
+    for (const item of parsed.data.items) {
+      quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
     }
-  }
 
-  const shippingCents = parseShippingCents();
-  const pricing = calculatePricing(
-    products.map((product) => ({
-      productId: product._id,
-      unitPriceCents: dollarsToCents(product.price!),
-      quantity: quantities.get(product._id)!,
-      discountPercent: product.discount ?? 0,
-      taxable: product.taxable !== false,
-    })),
-    { shippingCents, currency: STORE_CURRENCY }
-  );
+    const productIds = [...quantities.keys()];
+    const products = await fetchProducts(productIds);
+    if (products.length !== productIds.length) {
+      return failure("INVALID_CART", "Uno o más productos ya no existen. Elimínalos del carrito para continuar.");
+    }
 
-  const orderUuid = crypto.randomUUID();
-  const orderId = `order.${orderUuid}`;
-  const now = new Date().toISOString();
-  const orderProducts = pricing.lines.map((line) => {
-    const product = productById.get(line.productId)!;
-    return {
-      _key: crypto.randomUUID(),
-      product: { _type: "reference", _ref: product._id },
-      productId: product._id,
-      quantity: line.quantity,
-      nameSnapshot: product.name ?? "Producto",
-      skuSnapshot: product.sku,
-      variantSnapshot: product.variant,
-      unitPriceCents: line.unitPriceCents,
-      subtotalCents: line.subtotalCents,
-      discountCents: line.discountCents,
-      itbmsCents: line.itbmsCents,
-      totalCents: line.totalCents,
-    };
-  });
+    const productById = new Map(products.map((product) => [product._id, product]));
+    const inventoryConflicts: InventoryAvailability[] = [];
+    for (const [productId, quantity] of quantities) {
+      const product = productById.get(productId);
+      if (!product || product.isActive === false) {
+        return failure("INVALID_CART", "Uno de los productos ya no está disponible.");
+      }
+      if (product.price === undefined || !Number.isFinite(product.price) || product.price < 0) {
+        return failure("INVALID_CART", "Uno de los productos no tiene un precio válido.");
+      }
+      const availableQuantity = Number.isSafeInteger(product.stock) ? Math.max(0, product.stock ?? 0) : 0;
+      if (availableQuantity < quantity) inventoryConflicts.push({ productId, availableQuantity });
+    }
+    if (inventoryConflicts.length > 0) throw new StockChangedError(inventoryConflicts);
 
-  let reservation = backendClient.transaction().create({
-    _id: orderId,
-    _type: "order",
-    orderNumber: orderUuid,
-    clerkUserId: userId,
-    customerName: user.fullName || user.firstName || "Cliente",
-    email,
-    stripeCustomerId: "pending",
-    stripePaymentIntentId: "pending",
-    products: orderProducts,
-    subtotalCents: pricing.subtotalCents,
-    discountCents: pricing.discountCents,
-    taxBaseCents: pricing.taxBaseCents,
-    itbmsCents: pricing.itbmsCents,
-    shippingCents: pricing.shippingCents,
-    totalCents: pricing.totalCents,
-    totalPrice: centsToDollars(pricing.totalCents),
-    amountDiscount: centsToDollars(pricing.discountCents),
-    currency: pricing.currency,
-    status: "pending",
-    inventoryReserved: true,
-    orderDate: now,
-  });
-
-  for (const product of products) {
-    const quantity = quantities.get(product._id)!;
-    reservation = reservation
-      .patch(product._id, (patch) => patch.ifRevisionId(product._rev).dec({ stock: quantity }))
-      .create({
-        _id: `inventory.${orderUuid}.${product._id.replace(/[^a-zA-Z0-9_-]/g, "_")}.reserve`,
-        _type: "inventoryMovement",
+    logger.info("checkout_stock_validated", { orderId, userId, productCount: products.length });
+    const shippingCents = parseShippingCents();
+    const pricing = calculatePricing(
+      products.map((product) => ({
         productId: product._id,
-        orderId,
-        quantity: -quantity,
-        reason: "checkout_reserved",
-        createdAt: now,
-      });
-  }
+        unitPriceCents: dollarsToCents(product.price!),
+        quantity: quantities.get(product._id)!,
+        discountPercent: product.discount ?? 0,
+        taxable: product.taxable !== false,
+      })),
+      { shippingCents, currency: STORE_CURRENCY }
+    );
 
-  try {
-    await reservation.commit();
-  } catch {
-    logger.warn("checkout_reservation_failed", { orderId, userId });
-    throw new Error("El inventario cambió. Actualiza el carrito e inténtalo nuevamente");
-  }
-
-  logger.info("checkout_started", { orderId, userId, totalCents: pricing.totalCents });
-
-  try {
-    const customers = await stripe.customers.list({ email, limit: 1 });
-    const customerId = customers.data[0]?.id;
-    const lineItems = pricing.lines.map((line) => {
+    const now = new Date().toISOString();
+    const orderProducts = pricing.lines.map((line) => {
       const product = productById.get(line.productId)!;
       return {
-        price_data: {
-          currency: pricing.currency,
-          unit_amount: line.taxBaseCents,
-          product_data: {
-            name: `${product.name ?? "Producto"} × ${line.quantity}`,
-            description: product.description,
-            metadata: { productId: product._id },
-          },
-        },
-        quantity: 1,
+        _key: crypto.randomUUID(),
+        product: { _type: "reference", _ref: product._id },
+        productId: product._id,
+        quantity: line.quantity,
+        nameSnapshot: product.name ?? "Producto",
+        skuSnapshot: product.sku,
+        variantSnapshot: product.variant,
+        unitPriceCents: line.unitPriceCents,
+        subtotalCents: line.subtotalCents,
+        discountCents: line.discountCents,
+        itbmsCents: line.itbmsCents,
+        totalCents: line.totalCents,
       };
     });
-    if (pricing.itbmsCents > 0) {
-      lineItems.push({
-        price_data: {
-          currency: pricing.currency,
-          unit_amount: pricing.itbmsCents,
-          product_data: { name: `ITBMS (${process.env.NEXT_PUBLIC_ITBMS_RATE ?? "0.07"})`, description: undefined, metadata: { productId: "tax" } },
-        },
-        quantity: 1,
-      });
-    }
-    if (pricing.shippingCents > 0) {
-      lineItems.push({
-        price_data: {
-          currency: pricing.currency,
-          unit_amount: pricing.shippingCents,
-          product_data: { name: "Envío", description: undefined, metadata: { productId: "shipping" } },
-        },
-        quantity: 1,
-      });
-    }
 
-    const baseUrl = getBaseUrl();
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      payment_method_types: ["card"],
-      invoice_creation: { enabled: true },
-      customer: customerId,
-      customer_email: customerId ? undefined : email,
-      client_reference_id: orderId,
-      metadata: { orderId, clerkUserId: userId },
-      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/cart?payment=cancelled`,
-      line_items: lineItems,
+    let reservation = backendClient.transaction().create({
+      _id: orderId,
+      _type: "order",
+      orderNumber: attemptId,
+      checkoutAttemptId: attemptId,
+      clerkUserId: userId,
+      customerName: user.fullName || user.firstName || "Cliente",
+      email,
+      stripeCustomerId: "pending",
+      stripePaymentIntentId: "pending",
+      products: orderProducts,
+      subtotalCents: pricing.subtotalCents,
+      discountCents: pricing.discountCents,
+      taxBaseCents: pricing.taxBaseCents,
+      itbmsCents: pricing.itbmsCents,
+      shippingCents: pricing.shippingCents,
+      totalCents: pricing.totalCents,
+      totalPrice: centsToDollars(pricing.totalCents),
+      amountDiscount: centsToDollars(pricing.discountCents),
+      currency: pricing.currency,
+      status: "pending",
+      inventoryReserved: true,
+      orderDate: now,
     });
 
-    await backendClient.patch(orderId).set({
-      stripeCheckoutSessionId: session.id,
-      stripeCustomerId: typeof session.customer === "string" ? session.customer : customerId ?? "guest",
-      status: "payment_pending",
-    }).commit();
-    logger.info("checkout_session_created", { orderId, sessionId: session.id });
-    if (!session.url) throw new Error("Stripe no devolvió una URL de pago");
-    return session.url;
+    for (const product of products) {
+      const quantity = quantities.get(product._id)!;
+      reservation = reservation
+        .patch(product._id, (patch) => patch.ifRevisionId(product._rev).dec({ stock: quantity }))
+        .create({
+          _id: `inventory.${attemptId}.${safeId(product._id)}.reserve`,
+          _type: "inventoryMovement",
+          productId: product._id,
+          orderId,
+          quantity: -quantity,
+          reason: "checkout_reserved",
+          createdAt: now,
+        });
+    }
+
+    try {
+      await reservation.commit();
+    } catch (error) {
+      if (!isSanityConflict(error)) throw error;
+      const concurrentOrder = await getExistingCheckout(orderId);
+      if (concurrentOrder) return reuseExistingCheckout(concurrentOrder, userId);
+      const inventory = await loadInventoryAvailability(productIds);
+      throw new StockChangedError(inventory);
+    }
+
+    logger.info("checkout_reservation_succeeded", { orderId, userId, productCount: products.length });
+    logger.info("checkout_started", { orderId, userId, totalCents: pricing.totalCents });
+
+    let session;
+    try {
+      const customers = await stripe.customers.list({ email, limit: 1 });
+      const customerId = customers.data[0]?.id;
+      const lineItems = pricing.lines.map((line) => {
+        const product = productById.get(line.productId)!;
+        return {
+          price_data: {
+            currency: pricing.currency,
+            unit_amount: line.taxBaseCents,
+            product_data: {
+              name: `${product.name ?? "Producto"} × ${line.quantity}`,
+              description: product.description,
+              metadata: { productId: product._id },
+            },
+          },
+          quantity: 1,
+        };
+      });
+      if (pricing.itbmsCents > 0) {
+        lineItems.push({
+          price_data: {
+            currency: pricing.currency,
+            unit_amount: pricing.itbmsCents,
+            product_data: { name: `ITBMS (${process.env.NEXT_PUBLIC_ITBMS_RATE ?? "0.07"})`, description: undefined, metadata: { productId: "tax" } },
+          },
+          quantity: 1,
+        });
+      }
+      if (pricing.shippingCents > 0) {
+        lineItems.push({
+          price_data: {
+            currency: pricing.currency,
+            unit_amount: pricing.shippingCents,
+            product_data: { name: "Envío", description: undefined, metadata: { productId: "shipping" } },
+          },
+          quantity: 1,
+        });
+      }
+
+      const baseUrl = getBaseUrl();
+      session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        payment_method_types: ["card"],
+        invoice_creation: { enabled: true },
+        customer: customerId,
+        customer_email: customerId ? undefined : email,
+        client_reference_id: orderId,
+        metadata: { orderId, clerkUserId: userId },
+        success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/cart?payment=cancelled`,
+        line_items: lineItems,
+      }, { idempotencyKey: `checkout:${orderId}` });
+
+      if (!session.url) throw new Error("STRIPE_CHECKOUT_URL_MISSING");
+      try {
+        await backendClient.patch(orderId).set({
+          stripeCheckoutSessionId: session.id,
+          stripeCustomerId: typeof session.customer === "string" ? session.customer : customerId ?? "guest",
+          status: "payment_pending",
+        }).commit();
+      } catch {
+        logger.warn("checkout_order_session_link_failed", { orderId, sessionId: session.id });
+      }
+      logger.info("checkout_payment_session_created", { orderId, sessionId: session.id });
+      return { success: true, checkoutUrl: session.url, orderId };
+    } catch {
+      try {
+        await releaseReservation(orderId, attemptId, products, quantities);
+      } catch {
+        logger.error("inventory_reservation_release_failed", { orderId });
+      }
+      logger.error("checkout_payment_session_failed", { orderId });
+      return failure("CHECKOUT_FAILED", "No pudimos iniciar el pago. Inténtalo nuevamente en unos momentos.");
+    }
   } catch (error) {
-    await releaseReservation(orderId, orderUuid, products, quantities);
-    logger.error("checkout_session_failed", { orderId });
-    throw error instanceof Error ? error : new Error("No se pudo iniciar el pago");
+    if (error instanceof StockChangedError) {
+      logReservationFailure(orderId, userId, toQuantityMap(parsed.data.items), error.inventory);
+      return {
+        success: false,
+        code: "STOCK_CHANGED",
+        message: "La disponibilidad de uno de los productos cambió. Actualizamos el carrito para mostrar el inventario disponible.",
+        inventory: error.inventory,
+      };
+    }
+    logger.error("checkout_unexpected_error", { orderId, userId });
+    return failure("CHECKOUT_FAILED", "No pudimos iniciar el pago. Inténtalo nuevamente en unos momentos.");
   }
 }
 
-async function releaseReservation(
-  orderId: string,
-  orderUuid: string,
-  products: CatalogProduct[],
-  quantities: Map<string, number>
-) {
-  let transaction = backendClient.transaction().patch(orderId, (patch) => patch.set({
+async function getExistingCheckout(orderId: string): Promise<ExistingCheckoutOrder | null> {
+  return backendClient.fetch(
+    `*[_type == "order" && _id == $orderId][0]{_id,clerkUserId,status,stripeCheckoutSessionId}`,
+    { orderId }
+  );
+}
+
+async function reuseExistingCheckout(order: ExistingCheckoutOrder, userId: string): Promise<CheckoutResult> {
+  if (order.clerkUserId !== userId) return failure("CHECKOUT_FAILED", "No pudimos iniciar el pago.");
+  if (order.status === "payment_pending" && order.stripeCheckoutSessionId) {
+    try {
+      const session = await stripe.checkout.sessions.retrieve(order.stripeCheckoutSessionId);
+      if (session.url && session.status === "open") {
+        return { success: true, checkoutUrl: session.url, orderId: order._id };
+      }
+    } catch {
+      logger.warn("checkout_session_reuse_failed", { orderId: order._id });
+    }
+  }
+  if (order.status === "pending" || order.status === "payment_pending") {
+    return failure("CHECKOUT_IN_PROGRESS", "Este pago ya se está preparando. Espera unos segundos e inténtalo nuevamente.");
+  }
+  return failure("CHECKOUT_FAILED", "Este intento de pago ya finalizó. Inicia un nuevo intento.");
+}
+
+async function fetchProducts(productIds: string[]): Promise<CatalogProduct[]> {
+  return backendClient.fetch(
+    `*[_type == "product" && _id in $ids]{_id,_rev,name,description,sku,variant,price,discount,stock,taxable,isActive}`,
+    { ids: productIds }
+  );
+}
+
+async function loadInventoryAvailability(productIds: string[]): Promise<InventoryAvailability[]> {
+  const products = await backendClient.fetch<Array<{ _id: string; stock?: number }>>(
+    `*[_type == "product" && _id in $ids]{_id,stock}`,
+    { ids: productIds }
+  );
+  const byId = new Map(products.map((product) => [product._id, product.stock]));
+  return productIds.map((productId) => ({
+    productId,
+    availableQuantity: Number.isSafeInteger(byId.get(productId)) ? Math.max(0, byId.get(productId) ?? 0) : 0,
+  }));
+}
+
+async function releaseReservation(orderId: string, attemptId: string, products: CatalogProduct[], quantities: Map<string, number>) {
+  const order = await backendClient.fetch<ReleasableOrder | null>(
+    `*[_type == "order" && _id == $orderId][0]{_rev,inventoryReserved}`,
+    { orderId }
+  );
+  if (!order?.inventoryReserved) return;
+
+  const now = new Date().toISOString();
+  let transaction = backendClient.transaction().patch(orderId, (patch) => patch.ifRevisionId(order._rev).set({
     status: "payment_failed",
     inventoryReserved: false,
   }));
@@ -236,17 +329,58 @@ async function releaseReservation(
     const quantity = quantities.get(product._id)!;
     transaction = transaction
       .patch(product._id, (patch) => patch.inc({ stock: quantity }))
-      .createIfNotExists({
-        _id: `inventory.${orderUuid}.${product._id.replace(/[^a-zA-Z0-9_-]/g, "_")}.release`,
+      .create({
+        _id: `inventory.${attemptId}.${safeId(product._id)}.release`,
         _type: "inventoryMovement",
         productId: product._id,
         orderId,
         quantity,
         reason: "checkout_failed_release",
-        createdAt: new Date().toISOString(),
+        createdAt: now,
       });
   }
-  await transaction.commit();
+  try {
+    await transaction.commit();
+    logger.info("inventory_reservation_released", { orderId, productCount: products.length });
+  } catch (error) {
+    const latest = await backendClient.fetch<ReleasableOrder | null>(
+      `*[_type == "order" && _id == $orderId][0]{_rev,inventoryReserved}`,
+      { orderId }
+    );
+    if (latest?.inventoryReserved) throw error;
+  }
+}
+
+function logReservationFailure(orderId: string, userId: string, quantities: Map<string, number>, inventory: InventoryAvailability[]) {
+  for (const item of inventory) {
+    const requestedQuantity = quantities.get(item.productId) ?? 0;
+    if (item.availableQuantity >= requestedQuantity) continue;
+    logger.warn("checkout_reservation_failed", {
+      orderId,
+      userId,
+      productId: item.productId,
+      requestedQuantity,
+      availableQuantity: item.availableQuantity,
+    });
+  }
+}
+
+function toQuantityMap(items: Array<{ productId: string; quantity: number }>): Map<string, number> {
+  const quantities = new Map<string, number>();
+  for (const item of items) quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
+  return quantities;
+}
+
+function failure(code: "EMPTY_CART" | "INVALID_CART" | "UNAUTHORIZED" | "CHECKOUT_IN_PROGRESS" | "CHECKOUT_FAILED", message: string): CheckoutResult {
+  return { success: false, code, message };
+}
+
+function isSanityConflict(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "statusCode" in error && (error as { statusCode?: number }).statusCode === 409);
+}
+
+function safeId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
 function parseShippingCents(): number {

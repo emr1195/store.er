@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => {
     create: vi.fn(),
     transaction: vi.fn(() => chain),
     chain,
+    getOrderForMutation: vi.fn(),
+    cancelOrderWithInventory: vi.fn(),
   };
 });
 
@@ -27,7 +29,7 @@ vi.mock("@/sanity/lib/backendClient", () => ({ backendClient: {
 } }));
 vi.mock("@/lib/orderService", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/orderService")>();
-  return { ...original, getOrderForMutation: vi.fn(), cancelOrderWithInventory: vi.fn() };
+  return { ...original, getOrderForMutation: mocks.getOrderForMutation, cancelOrderWithInventory: mocks.cancelOrderWithInventory };
 });
 vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
@@ -62,5 +64,27 @@ describe("Stripe webhook", () => {
     mocks.create.mockResolvedValue({});
     expect((await POST(request())).status).toBe(200);
     expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ _id: "stripeEvent.evt_2", eventId: "evt_2" }));
+  });
+
+  it("un checkout vencido libera la reserva mediante la operación idempotente", async () => {
+    mocks.constructEvent.mockReturnValue({
+      id: "evt_expired",
+      type: "checkout.session.expired",
+      data: { object: { id: "cs_expired", metadata: { orderId: "order.1" } } },
+    });
+    mocks.fetch.mockResolvedValue(null);
+    mocks.getOrderForMutation.mockResolvedValue({
+      _id: "order.1",
+      _rev: "r1",
+      status: "payment_pending",
+      inventoryReserved: true,
+      products: [{ productId: "p1", quantity: 1 }],
+    });
+
+    expect((await POST(request())).status).toBe(200);
+    expect(mocks.cancelOrderWithInventory).toHaveBeenCalledWith(expect.objectContaining({
+      reason: "checkout_expired",
+      targetStatus: "cancelled",
+    }));
   });
 });
