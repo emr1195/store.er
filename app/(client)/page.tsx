@@ -8,7 +8,7 @@ export default function Home() {
   return (
     <main>
       <HomeBanner />
-      <Container className="py-12 sm:py-16">
+      <Container className="py-5 sm:py-12 lg:py-16">
         <ProductGrid />
       </Container>
       <StoreBenefits />

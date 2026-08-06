@@ -6,6 +6,7 @@ import { PRODUCTS_QUERYResult } from "@/sanity.types";
 import ProductCard from "./ProductCard";
 import HomeTabbar from "./new/HomeTabbar";
 import NoProductAvailable from "./new/NoProductAvailable";
+import { productType } from "@/constants";
 
 export default function ProductGrid() {
   const [products, setProducts] = useState<PRODUCTS_QUERYResult>([]);
@@ -13,6 +14,7 @@ export default function ProductGrid() {
   const [error, setError] = useState(false);
   const [selectedTab, setSelectedTab] = useState("");
   const [requestVersion, setRequestVersion] = useState(0);
+  const selectedCategory = productType.find((item) => item.value === selectedTab)?.title;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -33,12 +35,14 @@ export default function ProductGrid() {
   }, [selectedTab, requestVersion]);
 
   return (
-    <section id="productos" aria-labelledby="products-title" className="scroll-mt-24">
-      <div className="mb-8 text-center"><p className="text-sm font-black uppercase tracking-[.18em] text-brand-blue">Catálogo oficial</p><h2 id="products-title" className="mt-2 text-3xl font-black text-brand-navy sm:text-4xl">Encuentra lo que necesitas</h2><p className="mx-auto mt-3 max-w-2xl text-slate-600">Explora artículos para tu uniforme, actividades y destacamento.</p></div>
+    <section id="productos" aria-labelledby="products-title" className="scroll-mt-20 lg:scroll-mt-24">
       <HomeTabbar selectedTab={selectedTab} onTabSelect={setSelectedTab} />
-      {loading ? <div role="status" className="mt-8 flex min-h-64 items-center justify-center gap-2 rounded-2xl bg-white text-brand-blue"><Loader2 className="h-5 w-5 animate-spin" /><span className="font-bold">Cargando productos…</span></div>
-      : error ? <div role="alert" className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-8 text-center"><p className="font-bold text-brand-red">No pudimos cargar los productos.</p><button onClick={() => setRequestVersion((version) => version + 1)} className="mt-3 min-h-11 font-bold text-brand-blue underline">Intentar nuevamente</button></div>
-      : products.length ? <div className="mt-8 grid grid-cols-1 gap-4 min-[390px]:grid-cols-2 md:grid-cols-3 md:gap-6 xl:grid-cols-4">{products.map((product) => <ProductCard key={product._id} product={product} />)}</div>
+      <div className="mb-4 mt-4 flex min-h-12 items-end justify-between gap-4">
+        <div><h2 id="products-title" className="text-2xl font-black leading-tight text-brand-navy sm:text-3xl">{selectedCategory ?? "Productos destacados"}</h2>{selectedCategory && !loading && !error ? <p className="mt-1 text-sm text-slate-500" aria-live="polite">{products.length} {products.length === 1 ? "producto" : "productos"}</p> : null}</div>
+      </div>
+      {loading ? <div role="status" className="flex min-h-48 items-center justify-center gap-2 rounded-2xl bg-white text-brand-blue"><Loader2 aria-hidden="true" className="h-5 w-5 animate-spin" /><span className="font-bold">Cargando productos…</span></div>
+      : error ? <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center"><p className="font-bold text-brand-red">No pudimos cargar los productos.</p><button onClick={() => setRequestVersion((version) => version + 1)} className="mt-3 min-h-11 font-bold text-brand-blue underline">Intentar nuevamente</button></div>
+      : products.length ? <div className="grid grid-cols-1 gap-4 min-[390px]:grid-cols-2 md:grid-cols-3 md:gap-6 xl:grid-cols-4">{products.map((product) => <ProductCard key={product._id} product={product} />)}</div>
       : <NoProductAvailable selectedTab={selectedTab || "Todos"} />}
     </section>
   );
