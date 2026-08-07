@@ -6,10 +6,7 @@ import tshirtImage from "@/images/products/uploaded/tshirt_new.png";
 
 const HomeBanner = () => (
   <section aria-labelledby="hero-title" className="relative overflow-hidden bg-page-bg text-brand-navy lg:bg-brand-navy lg:text-white">
-    <div aria-hidden="true" className="relative h-9 overflow-hidden bg-brand-navy lg:absolute lg:inset-0 lg:h-auto lg:opacity-30 lg:[background-image:radial-gradient(circle_at_20%_20%,#2457f5_0,transparent_35%),radial-gradient(circle_at_90%_80%,#ffd23f_0,transparent_22%)]">
-      <span className="absolute -top-5 left-6 h-8 w-28 -rotate-3 rounded-full bg-white/95 lg:hidden" />
-      <span className="absolute -top-6 right-5 h-9 w-36 rotate-3 rounded-full bg-white/95 lg:hidden" />
-    </div>
+    <div aria-hidden="true" className="h-9 bg-brand-navy lg:absolute lg:inset-0 lg:h-auto lg:opacity-30 lg:[background-image:radial-gradient(circle_at_20%_20%,#2457f5_0,transparent_35%),radial-gradient(circle_at_90%_80%,#ffd23f_0,transparent_22%)]" />
     <div className="relative mx-auto grid max-w-screen-xl items-center gap-10 px-5 pb-7 pt-8 sm:px-6 sm:py-12 lg:grid-cols-[1.08fr_.92fr] lg:px-8 lg:py-20">
       <div className="max-w-3xl">
         <p className="text-xs font-black uppercase tracking-[.2em] text-brand-blue lg:mb-4 lg:inline-flex lg:items-center lg:gap-2 lg:rounded-full lg:border lg:border-white/20 lg:bg-white/10 lg:px-4 lg:py-2 lg:text-sm lg:normal-case lg:tracking-normal lg:text-white">
