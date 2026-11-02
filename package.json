@@ -16,6 +16,7 @@
     "migrate:neon": "node --env-file=.env.local --env-file=.env.neon.local scripts/migrate-sanity-to-neon.mjs",
     "migrate:auth": "node --env-file=.env.local scripts/migrate-better-auth.mjs",
     "migrate:auth-users": "node --env-file=.env.local scripts/migrate-clerk-users-to-better-auth.mjs",
+    "provision:super-admin": "node --env-file=.env.local --env-file=.env.neon.local scripts/provision-super-admin.mjs",
     "audit:neon": "node --env-file=.env.local --env-file=.env.neon.local scripts/audit-neon-migration.mjs",
     "typegen": "sanity schema extract && sanity typegen generate"
   },
