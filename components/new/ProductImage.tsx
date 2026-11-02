@@ -35,26 +35,32 @@ export default function ProductImage({
           className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-100 via-white to-slate-200 motion-reduce:animate-none"
         />
       )}
-      <Image
-        src={currentSrc}
-        alt={alt}
-        fill
-        sizes={sizes}
-        onLoad={() => setLoaded(true)}
-        onError={() => {
-          if (currentSrc !== "/product-placeholder.svg") {
-            setLoaded(false);
-            setCurrentSrc("/product-placeholder.svg");
-          } else {
-            setLoaded(true);
-          }
-        }}
-        className={cn(
-          "transition-opacity duration-300 motion-reduce:transition-none",
-          loaded ? "opacity-100" : "opacity-0",
-          imageClassName
-        )}
-      />
+      {isExternalNonSanityImage(currentSrc) ? (
+        // Direct rendering avoids proxying arbitrary administrator-provided hosts through the image optimizer.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={currentSrc} alt={alt} onLoad={() => setLoaded(true)} onError={() => setCurrentSrc("/product-placeholder.svg")} className={cn("absolute inset-0 h-full w-full transition-opacity duration-300 motion-reduce:transition-none", loaded ? "opacity-100" : "opacity-0", imageClassName)} />
+      ) : (
+        <Image
+          src={currentSrc}
+          alt={alt}
+          fill
+          sizes={sizes}
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            if (currentSrc !== "/product-placeholder.svg") {
+              setLoaded(false);
+              setCurrentSrc("/product-placeholder.svg");
+            } else {
+              setLoaded(true);
+            }
+          }}
+          className={cn("transition-opacity duration-300 motion-reduce:transition-none", loaded ? "opacity-100" : "opacity-0", imageClassName)}
+        />
+      )}
     </span>
   );
+}
+
+function isExternalNonSanityImage(value: string): boolean {
+  return value.startsWith("https://") && !value.startsWith("https://cdn.sanity.io/");
 }

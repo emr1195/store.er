@@ -88,6 +88,12 @@ body {
   }
 }
 
+@layer components {
+  .admin-input {
+    @apply min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-brand-navy shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-blue focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100;
+  }
+}
+
 body {
   background: var(--color-page-bg);
   color: var(--color-ink);
