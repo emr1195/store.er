@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
 import { ShoppingBag } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Product } from "@/sanity.types";
@@ -19,6 +18,7 @@ import { createCheckoutSession } from "@/actions/createCheckoutSession";
 import type { CheckoutFailureCode } from "@/lib/checkout";
 import { calculatePricing, centsToDollars, dollarsToCents, STORE_CURRENCY, type PricingResult } from "@/lib/pricing";
 import useCartStore from "@/store";
+import { useSession } from "@/lib/auth-client";
 
 type CommerceProduct = Product & { taxable?: boolean };
 
@@ -38,7 +38,7 @@ export default function CartPage() {
   const deleteCartProduct = useCartStore((state) => state.deleteCartProduct);
   const reconcileItemStock = useCartStore((state) => state.reconcileItemStock);
   const resetCart = useCartStore((state) => state.resetCart);
-  const { isLoaded, isSignedIn } = useAuth();
+  const { data: session, isPending: isSessionPending } = useSession();
   const router = useRouter();
   const checkoutAttempt = useRef<string | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -48,8 +48,8 @@ export default function CartPage() {
 
   useEffect(() => setMounted(true), []);
 
-  if (!mounted || !isLoaded) return <Loading />;
-  if (!isSignedIn) return <NoAccessToCart />;
+  if (!mounted || isSessionPending) return <Loading />;
+  if (!session) return <NoAccessToCart />;
   if (groupedItems.length === 0) return <main className="min-h-screen bg-page-bg"><EmptyCart /></main>;
 
   let pricing = EMPTY_PRICING;

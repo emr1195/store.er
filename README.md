@@ -1,11 +1,11 @@
 # ER Marketplace
 
-Tienda para la organización Exploradores del Rey construida con Next.js 15. El catálogo, inventario, pedidos, auditoría y eventos de pago se almacenan en Sanity; Clerk gestiona las cuentas y Stripe Checkout procesa pagos en USD.
+Tienda para la organización Exploradores del Rey construida con Next.js 15. El catálogo, inventario, pedidos, auditoría, eventos de pago, usuarios y sesiones se almacenan en Neon. Better Auth gestiona el acceso y Stripe Checkout procesa pagos en USD.
 
 ## Requisitos
 
 - Node.js 20 o superior y npm.
-- Proyecto Clerk con Google/correo configurados.
+- Credenciales OAuth de Google configuradas para Better Auth cuando se habilite ese método.
 - Proyecto Sanity con dataset **privado**.
 - Cuenta Stripe en modo prueba o producción.
 
@@ -39,7 +39,7 @@ La migración `commerce-v2` añade valores seguros a documentos existentes. Su p
 ## Flujo de checkout
 
 1. El navegador envía únicamente ID de producto, cantidad y método de entrega.
-2. La Server Action obtiene la identidad desde Clerk y vuelve a consultar catálogo, precio, descuento y stock en Sanity.
+2. La Server Action valida la sesión de Better Auth y vuelve a consultar catálogo, precio, descuento y stock en Neon.
 3. `lib/pricing.ts` calcula en centavos subtotal, descuento, base gravable, ITBMS, envío y total.
 4. Una transacción Sanity crea el pedido `pending`, guarda snapshots y reserva inventario con control de revisión.
 5. Stripe recibe exclusivamente los importes calculados por el servidor. El pedido pasa a `payment_pending`.
@@ -63,11 +63,24 @@ El stock se reserva al iniciar el pago. Un pago confirmado conserva la reducció
 
 Flujo principal: `pending → payment_pending → paid → processing → shipped → delivered`. También existen `payment_failed`, `cancelled`, `refunded` y `archived`.
 
-El cliente sólo puede cancelar un pedido propio en `pending` o `payment_pending`. Un pedido pagado requiere un flujo administrativo de reembolso y nunca se elimina físicamente. Las acciones guardan actor, fecha y cambio de estado en `orderAudit`. El rol administrativo se lee de los claims de sesión Clerk (`metadata.role` o `publicMetadata.role`) y siempre se valida en servidor.
+El cliente sólo puede cancelar un pedido propio en `pending` o `payment_pending`. Un pedido pagado requiere un flujo administrativo de reembolso y nunca se elimina físicamente. Las acciones guardan actor, fecha y cambio de estado en `orderAudit`. El rol administrativo se almacena en el usuario de Better Auth dentro de Neon y siempre se valida en servidor.
 
 ## Sanity y privacidad
 
-El dataset debe configurarse como privado porque los pedidos contienen datos personales. El navegador no recibe tokens Sanity ni consulta documentos directamente; `/api/catalog` expone únicamente productos activos. El Studio está montado en `/admin/studio` y exige rol Clerk `admin`, además de los permisos propios de Sanity.
+El navegador no recibe credenciales de Neon ni consulta tablas directamente; `/api/catalog` expone únicamente productos activos. El Studio está montado en `/admin/studio` y exige rol Better Auth `admin`, además de los permisos propios de Sanity.
+
+## Autenticación
+
+Better Auth usa `DATABASE_URL`, `BETTER_AUTH_SECRET` y, en producción, `BETTER_AUTH_URL`. Google requiere además `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`, con la URL de retorno `https://<dominio>/api/auth/callback/google` registrada en Google Cloud.
+
+Para una migración inicial desde Clerk:
+
+```bash
+npm run migrate:auth
+npm run migrate:auth-users
+```
+
+El segundo comando conserva los IDs, roles y vínculos Google de los usuarios. No copia tokens OAuth. Los hashes de contraseña sólo pueden obtenerse mediante una exportación autorizada desde el panel de Clerk; hasta importar esa exportación, los usuarios migrados deben ingresar con Google.
 
 ## Despliegue en Vercel
 

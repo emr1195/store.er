@@ -1,38 +1,19 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
-import { hasAdminRole } from "@/lib/roles";
+import { getSessionCookie } from "better-auth/cookies";
+import { type NextRequest, NextResponse } from "next/server";
 
 // Create route matchers for protected routes
-const isProtectedRoute = createRouteMatcher([
-  "/admin(.*)",
-  "/account(.*)",
-  "/cart(.*)",
-  "/wishlist(.*)",
-  "/orders(.*)",
-  "/success(.*)",
-]);
-const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
-
-export default clerkMiddleware(async (auth, req) => {
-  const authObject = await auth();
-
-  if (isProtectedRoute(req) && !authObject.userId) {
+export function middleware(req: NextRequest) {
+  if (!getSessionCookie(req)) {
     const signInUrl = new URL(
       `/signin?redirect_url=${req.nextUrl.pathname}`,
       req.url
     );
     return NextResponse.redirect(signInUrl);
   }
-  if (isAdminRoute(req) && authObject.userId && !hasAdminRole(authObject.sessionClaims)) {
-    return NextResponse.redirect(new URL("/access-denied", req.url));
-  }
-
   return NextResponse.next();
-});
+}
 
 export const config = {
-  matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    "/(api|trpc)(.*)",
-  ],
+  runtime: "nodejs",
+  matcher: ["/admin/:path*", "/account/:path*", "/cart/:path*", "/wishlist/:path*", "/orders/:path*", "/success/:path*"],
 };

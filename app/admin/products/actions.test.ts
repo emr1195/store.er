@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  auth: vi.fn(),
+  requireAdminSession: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
   remove: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
-vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
+vi.mock("@/lib/auth-session", () => ({ requireAdminSession: mocks.requireAdminSession }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock("@/lib/neon/adminProducts", () => ({
   createAdminProduct: mocks.create,
@@ -23,7 +23,7 @@ const initialState = { success: false, message: "" };
 describe("admin product actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.auth.mockResolvedValue({ userId: "admin_1", sessionClaims: { metadata: { role: "admin" } } });
+    mocks.requireAdminSession.mockResolvedValue({ user: { id: "admin_1", role: "admin" } });
     mocks.create.mockResolvedValue("product.1");
     mocks.update.mockResolvedValue(undefined);
     mocks.remove.mockResolvedValue(undefined);
@@ -54,7 +54,7 @@ describe("admin product actions", () => {
   });
 
   it("exige rol administrador para crear, editar y eliminar", async () => {
-    mocks.auth.mockResolvedValue({ userId: "customer_1", sessionClaims: { metadata: { role: "customer" } } });
+    mocks.requireAdminSession.mockRejectedValue(new Error("ADMIN_REQUIRED"));
     await expect(createProductAction(initialState, validProductForm())).rejects.toThrow("ADMIN_REQUIRED");
     await expect(updateProductAction("product.1", initialState, validProductForm())).rejects.toThrow("ADMIN_REQUIRED");
     await expect(deleteProductAction("product.1")).rejects.toThrow("ADMIN_REQUIRED");

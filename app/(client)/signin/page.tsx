@@ -1,10 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { currentUser } from "@clerk/nextjs/server";
 import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import AuthActions from "@/components/auth/AuthActions";
+import { getServerSession } from "@/lib/auth-session";
+import { isGoogleAuthEnabled } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Ingresar | ER Panamá",
@@ -21,8 +22,8 @@ const getSafeRedirectUrl = (redirectUrl?: string) => {
 };
 
 const SignInPage = async ({ searchParams }: SignInPageProps) => {
-  const user = await currentUser();
-  if (user) redirect("/");
+  const session = await getServerSession();
+  if (session) redirect("/");
 
   const { redirect_url: requestedRedirectUrl } = await searchParams;
   const redirectUrl = getSafeRedirectUrl(requestedRedirectUrl);
@@ -61,7 +62,7 @@ const SignInPage = async ({ searchParams }: SignInPageProps) => {
         </div>
 
         <div className="mt-7">
-          <AuthActions redirectUrl={redirectUrl} />
+          <AuthActions redirectUrl={redirectUrl} googleEnabled={isGoogleAuthEnabled()} />
         </div>
 
         <p className="mt-6 text-xs leading-5 text-slate-500">

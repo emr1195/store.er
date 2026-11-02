@@ -1,15 +1,14 @@
-import { UserButton } from "@clerk/nextjs";
-import { auth } from "@clerk/nextjs/server";
 import { Boxes, ExternalLink, LayoutDashboard, PackageOpen } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { hasAdminRole } from "@/lib/roles";
+import { getServerSession, hasAdminRole } from "@/lib/auth-session";
+import AccountMenu from "@/components/auth/AccountMenu";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const { userId, sessionClaims } = await auth();
-  if (!userId) redirect("/signin?redirect_url=/admin");
-  if (!hasAdminRole(sessionClaims)) redirect("/access-denied");
+  const session = await getServerSession();
+  if (!session) redirect("/signin?redirect_url=/admin");
+  if (!hasAdminRole(session.user.role)) redirect("/access-denied");
 
   return (
     <div className="min-h-dvh bg-slate-100 text-brand-navy">
@@ -23,7 +22,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <Link href="/admin" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-4 hover:bg-slate-100"><LayoutDashboard aria-hidden="true" className="h-4 w-4" />Resumen</Link>
             <Link href="/admin/products" className="inline-flex min-h-11 items-center gap-2 rounded-xl px-4 hover:bg-slate-100"><PackageOpen aria-hidden="true" className="h-4 w-4" />Productos</Link>
             <Link href="/" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-4 hover:bg-slate-50">Ver tienda<ExternalLink aria-hidden="true" className="h-4 w-4" /></Link>
-            <span className="flex h-11 w-11 items-center justify-center"><UserButton /></span>
+            <AccountMenu compact />
           </nav>
         </div>
       </header>

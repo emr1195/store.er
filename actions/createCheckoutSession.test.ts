@@ -5,8 +5,7 @@ const mocks = vi.hoisted(() => {
   for (const name of ["create", "createIfNotExists", "patch", "set"]) chain[name] = vi.fn(() => chain);
   chain.commit = vi.fn(() => Promise.resolve({}));
   return {
-    auth: vi.fn(),
-    currentUser: vi.fn(),
+    getServerSession: vi.fn(),
     fetch: vi.fn(),
     transaction: vi.fn(() => chain),
     patch: vi.fn(() => chain),
@@ -30,7 +29,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth, currentUser: mocks.currentUser }));
+vi.mock("@/lib/auth-session", () => ({ getServerSession: mocks.getServerSession }));
 vi.mock("@/lib/neon/commerce", () => ({
   getExistingCheckout: mocks.getExistingCheckout,
   fetchProductsForCheckout: mocks.fetchProductsForCheckout,
@@ -65,11 +64,9 @@ describe("createCheckoutSession", () => {
     mocks.availability = null;
     mocks.existingOrders = [null];
     mocks.releaseOrder = { _rev: "order-r1", inventoryReserved: true };
-    mocks.auth.mockResolvedValue({ userId: "user_1" });
-    mocks.currentUser.mockResolvedValue({
-      fullName: "Cliente",
-      firstName: "Cliente",
-      primaryEmailAddress: { emailAddress: "client@example.com" },
+    mocks.getServerSession.mockResolvedValue({
+      user: { id: "user_1", name: "Cliente", email: "client@example.com", role: "user" },
+      session: { id: "session_1" },
     });
     mocks.getExistingCheckout.mockImplementation(() => Promise.resolve(mocks.existingOrders.shift() ?? null));
     mocks.fetchProductsForCheckout.mockImplementation(() => Promise.resolve(mocks.products));
@@ -84,7 +81,7 @@ describe("createCheckoutSession", () => {
   });
 
   it("devuelve UNAUTHORIZED sin lanzar para usuarios no autenticados", async () => {
-    mocks.auth.mockResolvedValue({ userId: null });
+    mocks.getServerSession.mockResolvedValue(null);
     await expect(createCheckoutSession(request())).resolves.toMatchObject({ success: false, code: "UNAUTHORIZED" });
     expect(mocks.sessionCreate).not.toHaveBeenCalled();
   });

@@ -1,6 +1,5 @@
 "use server";
 
-import { auth, currentUser } from "@clerk/nextjs/server";
 import { z } from "zod";
 import stripe from "@/lib/stripe";
 import { logger } from "@/lib/logger";
@@ -22,6 +21,7 @@ import {
   type CatalogProduct,
   type ExistingCheckoutOrder,
 } from "@/lib/neon/commerce";
+import { getServerSession } from "@/lib/auth-session";
 
 const checkoutSchema = z.object({
   items: z.array(z.object({
@@ -43,8 +43,9 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
   }
   if (parsed.data.discountCode) return failure("INVALID_CART", "El código de descuento no es válido o no está disponible.");
 
-  const { userId } = await auth();
-  if (!userId) return failure("UNAUTHORIZED", "Debes iniciar sesión para pagar.");
+  const authSession = await getServerSession();
+  if (!authSession) return failure("UNAUTHORIZED", "Debes iniciar sesión para pagar.");
+  const userId = authSession.user.id;
 
   const attemptId = parsed.data.attemptId ?? crypto.randomUUID();
   const orderId = `order.${attemptId}`;
@@ -58,9 +59,9 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
     if (existing) return reuseExistingCheckout(existing, userId);
 
     stage = "loading_user";
-    const user = await currentUser();
-    const email = user?.primaryEmailAddress?.emailAddress;
-    if (!user || !email) return failure("UNAUTHORIZED", "Tu cuenta no tiene un correo válido.");
+    const user = authSession.user;
+    const email = user.email;
+    if (!email) return failure("UNAUTHORIZED", "Tu cuenta no tiene un correo válido.");
 
     stage = "loading_cart";
     const quantities = new Map<string, number>();
@@ -136,7 +137,7 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
         orderNumber: attemptId,
         checkoutAttemptId: attemptId,
         clerkUserId: userId,
-        customerName: user.fullName || user.firstName || "Cliente",
+        customerName: user.name || "Cliente",
         email,
         subtotalCents: pricing.subtotalCents,
         discountCents: pricing.discountCents,
@@ -228,7 +229,7 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
         customer: customerId,
         customer_email: customerId ? undefined : email,
         client_reference_id: orderId,
-        metadata: { orderId, clerkUserId: userId },
+        metadata: { orderId, userId },
         success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/cart?payment=cancelled`,
         line_items: lineItems,

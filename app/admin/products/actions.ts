@@ -1,9 +1,8 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { hasAdminRole } from "@/lib/roles";
+import { requireAdminSession } from "@/lib/auth-session";
 import { createAdminProduct, deleteAdminProduct, updateAdminProduct } from "@/lib/neon/adminProducts";
 
 export type ProductActionState = {
@@ -71,9 +70,8 @@ export async function deleteProductAction(productId: string): Promise<ProductAct
 }
 
 async function requireAdmin(): Promise<string> {
-  const { userId, sessionClaims } = await auth();
-  if (!userId || !hasAdminRole(sessionClaims)) throw new Error("ADMIN_REQUIRED");
-  return userId;
+  const session = await requireAdminSession();
+  return session.user.id;
 }
 
 function parseProduct(formData: FormData) {

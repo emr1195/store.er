@@ -1,22 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useClerk } from "@clerk/nextjs";
-import { Loader2, Mail } from "lucide-react";
+import { FormEvent, useRef, useState } from "react";
+import { Eye, EyeOff, Loader2, Mail } from "lucide-react";
+import { authClient } from "@/lib/auth-client";
 
-type AuthMethod = "email" | "google" | "signup";
+type AuthMode = "signin" | "signup";
+type PendingMethod = "email" | "google" | null;
 
 type AuthActionsProps = {
   redirectUrl: string;
-};
-
-const clerkAppearance = {
-  variables: {
-    colorPrimary: "#2457F5",
-    colorText: "#15171A",
-    colorBackground: "#FFFFFF",
-    borderRadius: "0.875rem",
-  },
+  googleEnabled: boolean;
 };
 
 const GoogleIcon = () => (
@@ -28,127 +21,109 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export default function AuthActions({ redirectUrl }: AuthActionsProps) {
-  const clerk = useClerk();
-  const [pending, setPending] = useState<AuthMethod | null>(null);
+export default function AuthActions({ redirectUrl, googleEnabled }: AuthActionsProps) {
+  const [mode, setMode] = useState<AuthMode>("signin");
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [pending, setPending] = useState<PendingMethod>(null);
   const [error, setError] = useState<string | null>(null);
-  const pendingRef = useRef<AuthMethod | null>(null);
-  const resetTimer = useRef<number | null>(null);
+  const pendingRef = useRef(false);
 
-  useEffect(() => () => {
-    if (resetTimer.current) window.clearTimeout(resetTimer.current);
-  }, []);
-
-  const finishLaunching = () => {
-    resetTimer.current = window.setTimeout(() => {
-      pendingRef.current = null;
-      setPending(null);
-    }, 800);
-  };
-
-  const begin = (method: AuthMethod) => {
-    if (pendingRef.current || !clerk.loaded) return false;
-
+  const start = (method: Exclude<PendingMethod, null>) => {
+    if (pendingRef.current) return false;
     setError(null);
     if (!navigator.onLine) {
       setError("No hay conexión a internet. Verifica tu red e intenta nuevamente.");
       return false;
     }
-
-    pendingRef.current = method;
+    pendingRef.current = true;
     setPending(method);
     return true;
   };
 
-  const openSignIn = (method: Exclude<AuthMethod, "signup">) => {
-    if (!begin(method)) return;
+  const finish = () => {
+    pendingRef.current = false;
+    setPending(null);
+  };
+
+  const handleEmail = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!start("email")) return;
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") ?? "").trim().toLowerCase();
+    const password = String(form.get("password") ?? "");
+    const name = String(form.get("name") ?? "").trim();
+
     try {
-      clerk.openSignIn({
-        fallbackRedirectUrl: redirectUrl,
-        signUpFallbackRedirectUrl: redirectUrl,
-        appearance: clerkAppearance,
-      });
-      finishLaunching();
+      const result = mode === "signup"
+        ? await authClient.signUp.email({ name, email, password, callbackURL: redirectUrl })
+        : await authClient.signIn.email({ email, password, callbackURL: redirectUrl });
+      if (result.error) {
+        setError(readableAuthError(result.error.code));
+        finish();
+        return;
+      }
+      window.location.assign(redirectUrl);
     } catch {
-      pendingRef.current = null;
-      setPending(null);
-      setError("No pudimos abrir el inicio de sesión. Intenta nuevamente.");
-      console.error("No se pudo abrir el modal administrado de inicio de sesión.");
+      setError("No pudimos completar el acceso. Intenta nuevamente.");
+      finish();
     }
   };
 
-  const openSignUp = () => {
-    if (!begin("signup")) return;
+  const handleGoogle = async () => {
+    if (!googleEnabled || !start("google")) return;
     try {
-      clerk.openSignUp({
-        fallbackRedirectUrl: redirectUrl,
-        signInFallbackRedirectUrl: redirectUrl,
-        appearance: clerkAppearance,
-      });
-      finishLaunching();
+      const result = await authClient.signIn.social({ provider: "google", callbackURL: redirectUrl });
+      if (result.error) {
+        setError("No pudimos iniciar el acceso con Google. Intenta nuevamente.");
+        finish();
+      }
     } catch {
-      pendingRef.current = null;
-      setPending(null);
-      setError("No pudimos abrir el registro. Intenta nuevamente.");
-      console.error("No se pudo abrir el modal administrado de registro.");
+      setError("No pudimos comunicarnos con Google. Intenta nuevamente.");
+      finish();
     }
   };
 
-  const isBusy = pending !== null || !clerk.loaded;
+  const switchMode = (nextMode: AuthMode) => {
+    if (pendingRef.current) return;
+    setMode(nextMode);
+    setShowEmailForm(true);
+    setError(null);
+  };
+
+  const isBusy = pending !== null;
 
   return (
     <div>
-      {error && (
-        <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm font-medium leading-5 text-red-800">
-          {error}
-        </div>
-      )}
+      {error ? <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm font-medium leading-5 text-red-800">{error}</div> : null}
 
-      <button
-        type="button"
-        onClick={() => openSignIn("email")}
-        disabled={isBusy}
-        aria-busy={pending === "email"}
-        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2"
-      >
-        {pending === "email" ? <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin motion-reduce:animate-none" /> : <Mail aria-hidden="true" className="h-5 w-5" />}
-        {pending === "email" ? "Abriendo acceso…" : "Continuar con correo"}
-      </button>
-
-      <div className="my-5 flex items-center gap-3" aria-label="Otras opciones de acceso">
-        <span aria-hidden="true" className="h-px flex-1 bg-slate-200" />
-        <span className="shrink-0 text-xs font-semibold text-slate-500">o continúa con</span>
-        <span aria-hidden="true" className="h-px flex-1 bg-slate-200" />
-      </div>
-
-      <button
-        type="button"
-        onClick={() => openSignIn("google")}
-        disabled={isBusy}
-        aria-busy={pending === "google"}
-        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-brand-navy shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2"
-      >
-        {pending === "google" ? <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin motion-reduce:animate-none" /> : <GoogleIcon />}
-        {pending === "google" ? "Abriendo acceso…" : "Continuar con Google"}
-      </button>
-
-      <p className="mt-6 text-sm leading-6 text-slate-600">
-        ¿Aún no tienes una cuenta?{" "}
-        <button
-          type="button"
-          onClick={openSignUp}
-          disabled={isBusy}
-          className="min-h-11 rounded-lg px-1 font-bold text-brand-blue underline decoration-blue-200 underline-offset-4 hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2"
-        >
-          {pending === "signup" ? "Abriendo registro…" : "Crear cuenta"}
+      {!showEmailForm ? (
+        <button type="button" onClick={() => setShowEmailForm(true)} disabled={isBusy} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2">
+          <Mail aria-hidden="true" className="h-5 w-5" /> Continuar con correo
         </button>
-      </p>
-
-      {pending && (
-        <p role="status" aria-live="polite" className="sr-only">
-          {pending === "signup" ? "Abriendo el registro seguro." : "Abriendo el inicio de sesión seguro."}
-        </p>
+      ) : (
+        <form onSubmit={handleEmail} className="space-y-4 text-left">
+          {mode === "signup" ? <label className="block text-sm font-bold text-brand-navy">Nombre<input name="name" autoComplete="name" required minLength={2} className="mt-1.5 min-h-12 w-full rounded-xl border border-slate-300 px-4 font-normal outline-none focus:border-brand-blue focus:ring-2 focus:ring-blue-100" /></label> : null}
+          <label className="block text-sm font-bold text-brand-navy">Correo electrónico<input name="email" type="email" autoComplete="email" required className="mt-1.5 min-h-12 w-full rounded-xl border border-slate-300 px-4 font-normal outline-none focus:border-brand-blue focus:ring-2 focus:ring-blue-100" /></label>
+          <label className="block text-sm font-bold text-brand-navy">Contraseña<span className="relative mt-1.5 block"><input name="password" type={showPassword ? "text" : "password"} autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={8} className="min-h-12 w-full rounded-xl border border-slate-300 px-4 pr-12 font-normal outline-none focus:border-brand-blue focus:ring-2 focus:ring-blue-100" /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue">{showPassword ? <EyeOff aria-hidden="true" className="h-5 w-5" /> : <Eye aria-hidden="true" className="h-5 w-5" />}</button></span></label>
+          <button type="submit" disabled={isBusy} aria-busy={pending === "email"} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2">
+            {pending === "email" ? <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin motion-reduce:animate-none" /> : <Mail aria-hidden="true" className="h-5 w-5" />}
+            {pending === "email" ? "Procesando…" : mode === "signup" ? "Crear cuenta con correo" : "Ingresar con correo"}
+          </button>
+        </form>
       )}
+
+      {googleEnabled ? <><div className="my-5 flex items-center gap-3" aria-label="Otras opciones de acceso"><span aria-hidden="true" className="h-px flex-1 bg-slate-200" /><span className="shrink-0 text-xs font-semibold text-slate-500">o continúa con</span><span aria-hidden="true" className="h-px flex-1 bg-slate-200" /></div><button type="button" onClick={handleGoogle} disabled={isBusy} aria-busy={pending === "google"} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-brand-navy shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2">{pending === "google" ? <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin motion-reduce:animate-none" /> : <GoogleIcon />}{pending === "google" ? "Abriendo acceso…" : "Continuar con Google"}</button></> : null}
+
+      <p className="mt-6 text-sm leading-6 text-slate-600">{mode === "signin" ? "¿Aún no tienes una cuenta?" : "¿Ya tienes una cuenta?"}{" "}<button type="button" onClick={() => switchMode(mode === "signin" ? "signup" : "signin")} disabled={isBusy} className="min-h-11 rounded-lg px-1 font-bold text-brand-blue underline decoration-blue-200 underline-offset-4 hover:text-blue-800 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue">{mode === "signin" ? "Crear cuenta" : "Iniciar sesión"}</button></p>
+      {pending ? <p role="status" aria-live="polite" className="sr-only">Procesando el acceso seguro.</p> : null}
     </div>
   );
+}
+
+function readableAuthError(code: string | undefined): string {
+  if (code === "INVALID_EMAIL_OR_PASSWORD") return "El correo o la contraseña no son correctos.";
+  if (code === "USER_ALREADY_EXISTS" || code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") return "Ya existe una cuenta con este correo. Inicia sesión o usa Google.";
+  if (code === "PASSWORD_TOO_SHORT") return "La contraseña debe tener al menos 8 caracteres.";
+  return "No pudimos completar el acceso. Revisa los datos e intenta nuevamente.";
 }

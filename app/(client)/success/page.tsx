@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { getServerSession } from "@/lib/auth-session";
 import { Check, Clock, Home, Package } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -11,22 +11,22 @@ export default async function SuccessPage({
 }: {
   searchParams: Promise<{ session_id?: string }>;
 }) {
-  const { userId } = await auth();
-  if (!userId) redirect("/signin");
+  const authSession = await getServerSession();
+  if (!authSession) redirect("/signin");
   const { session_id: sessionId } = await searchParams;
   if (!sessionId) redirect("/cart?payment=invalid");
 
-  const session = await stripe.checkout.sessions.retrieve(sessionId).catch(() => null);
-  const referencedOrderId = session?.metadata?.orderId || session?.client_reference_id;
-  const order = await getSuccessOrder({ orderId: referencedOrderId ?? undefined, sessionId, userId });
+  const stripeSession = await stripe.checkout.sessions.retrieve(sessionId).catch(() => null);
+  const referencedOrderId = stripeSession?.metadata?.orderId || stripeSession?.client_reference_id;
+  const order = await getSuccessOrder({ orderId: referencedOrderId ?? undefined, sessionId, userId: authSession.user.id });
   if (!order) redirect("/orders?payment=not-found");
 
   const paidInOrder = ["paid", "processing", "shipped", "delivered"].includes(order.status ?? "");
   const paidInStripe = Boolean(
-    session
-      && session.payment_status === "paid"
-      && session.amount_total === order.totalCents
-      && session.currency?.toLowerCase() === order.currency?.toLowerCase()
+    stripeSession
+      && stripeSession.payment_status === "paid"
+      && stripeSession.amount_total === order.totalCents
+      && stripeSession.currency?.toLowerCase() === order.currency?.toLowerCase()
   );
   const paid = paidInOrder || paidInStripe;
   const purchasedItems = (order.products ?? []).flatMap((item) =>
