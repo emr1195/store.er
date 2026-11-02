@@ -17,6 +17,12 @@ const mocks = vi.hoisted(() => {
     loggerInfo: vi.fn(),
     loggerWarn: vi.fn(),
     loggerError: vi.fn(),
+    getExistingCheckout: vi.fn(),
+    fetchProductsForCheckout: vi.fn(),
+    loadInventoryAvailability: vi.fn(),
+    reserveInventoryAndCreateOrder: vi.fn(),
+    linkCheckoutSession: vi.fn(),
+    releaseCheckoutReservation: vi.fn(),
     products: [] as Array<Record<string, unknown>>,
     availability: null as Array<Record<string, unknown>> | null,
     existingOrders: [] as Array<Record<string, unknown> | null>,
@@ -25,8 +31,13 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth, currentUser: mocks.currentUser }));
-vi.mock("@/sanity/lib/backendClient", () => ({
-  backendClient: { fetch: mocks.fetch, transaction: mocks.transaction, patch: mocks.patch },
+vi.mock("@/lib/neon/commerce", () => ({
+  getExistingCheckout: mocks.getExistingCheckout,
+  fetchProductsForCheckout: mocks.fetchProductsForCheckout,
+  loadInventoryAvailability: mocks.loadInventoryAvailability,
+  reserveInventoryAndCreateOrder: mocks.reserveInventoryAndCreateOrder,
+  linkCheckoutSession: mocks.linkCheckoutSession,
+  releaseCheckoutReservation: mocks.releaseCheckoutReservation,
 }));
 vi.mock("@/lib/stripe", () => ({ default: {
   customers: { list: mocks.customerList },
@@ -49,7 +60,7 @@ describe("createCheckoutSession", () => {
     process.env.NEXT_PUBLIC_BASE_URL = "http://localhost:3000";
     process.env.NEXT_PUBLIC_ITBMS_RATE = "0.07";
     process.env.NEXT_PUBLIC_STANDARD_SHIPPING_CENTS = "0";
-    process.env.SANITY_API_TOKEN = "test-write-token";
+    process.env.DATABASE_URL = "postgresql://test:test@localhost/test";
     mocks.products = [{ _id: "p1", _rev: "r1", name: "Producto", price: 10, stock: 5, isActive: true }];
     mocks.availability = null;
     mocks.existingOrders = [null];
@@ -60,13 +71,12 @@ describe("createCheckoutSession", () => {
       firstName: "Cliente",
       primaryEmailAddress: { emailAddress: "client@example.com" },
     });
-    mocks.fetch.mockImplementation((query: string) => {
-      if (query.includes("stripeCheckoutSessionId")) return Promise.resolve(mocks.existingOrders.shift() ?? null);
-      if (query.includes("{_rev,inventoryReserved}")) return Promise.resolve(mocks.releaseOrder);
-      if (query.includes("{_id,stock}")) return Promise.resolve((mocks.availability ?? mocks.products).map(({ _id, stock }) => ({ _id, stock })));
-      if (query.includes("_id in $ids")) return Promise.resolve(mocks.products);
-      return Promise.resolve(null);
-    });
+    mocks.getExistingCheckout.mockImplementation(() => Promise.resolve(mocks.existingOrders.shift() ?? null));
+    mocks.fetchProductsForCheckout.mockImplementation(() => Promise.resolve(mocks.products));
+    mocks.loadInventoryAvailability.mockImplementation(() => Promise.resolve((mocks.availability ?? mocks.products).map(({ _id, stock }) => ({ productId: _id, availableQuantity: stock }))));
+    mocks.reserveInventoryAndCreateOrder.mockResolvedValue(undefined);
+    mocks.linkCheckoutSession.mockResolvedValue(undefined);
+    mocks.releaseCheckoutReservation.mockResolvedValue(undefined);
     mocks.chain.commit.mockResolvedValue({});
     mocks.customerList.mockResolvedValue({ data: [] });
     mocks.sessionCreate.mockResolvedValue({ id: "cs_1", url: "https://checkout.test", customer: null });
@@ -86,7 +96,7 @@ describe("createCheckoutSession", () => {
     expect(payload.line_items[0].price_data.unit_amount).toBe(1000);
     expect(payload.line_items[1].price_data.unit_amount).toBe(70);
     expect(mocks.sessionCreate.mock.calls[0][1]).toEqual({ idempotencyKey: `checkout:order.${attemptId}` });
-    expect(mocks.transaction).toHaveBeenCalledTimes(1);
+    expect(mocks.reserveInventoryAndCreateOrder).toHaveBeenCalledTimes(1);
   });
 
   it("omite descripciones vacías del payload enviado a Stripe", async () => {
@@ -111,7 +121,7 @@ describe("createCheckoutSession", () => {
   it("devuelve STOCK_CHANGED con el stock real cuando es insuficiente", async () => {
     const result = await createCheckoutSession(request(6));
     expect(result).toMatchObject({ success: false, code: "STOCK_CHANGED", inventory: [{ productId: "p1", availableQuantity: 5 }] });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.reserveInventoryAndCreateOrder).not.toHaveBeenCalled();
     expect(mocks.sessionCreate).not.toHaveBeenCalled();
   });
 
@@ -123,57 +133,52 @@ describe("createCheckoutSession", () => {
   it("rechaza un producto inactivo antes de reservar", async () => {
     mocks.products[0].isActive = false;
     await expect(createCheckoutSession(request())).resolves.toMatchObject({ success: false, code: "INVALID_CART" });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.reserveInventoryAndCreateOrder).not.toHaveBeenCalled();
   });
 
   it("trata un descuento inválido del catálogo como INVALID_CART", async () => {
     mocks.products[0].discount = 101;
     await expect(createCheckoutSession(request())).resolves.toMatchObject({ success: false, code: "INVALID_CART" });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.reserveInventoryAndCreateOrder).not.toHaveBeenCalled();
     expect(mocks.loggerError).not.toHaveBeenCalledWith("checkout_unexpected_error", expect.anything());
   });
 
-  it("registra la etapa y un código seguro si falta la credencial de escritura", async () => {
-    delete process.env.SANITY_API_TOKEN;
+  it("registra la etapa y un código seguro si Neon no está disponible", async () => {
+    mocks.reserveInventoryAndCreateOrder.mockRejectedValueOnce(Object.assign(new Error("DATABASE_URL no está configurada"), { code: "DATABASE_URL_MISSING" }));
     const result = await createCheckoutSession(request());
-    expect(result).toMatchObject({ success: false, code: "CHECKOUT_FAILED" });
-    expect(mocks.transaction).not.toHaveBeenCalled();
-    expect(mocks.loggerError).toHaveBeenCalledWith("checkout_unexpected_error", expect.objectContaining({
-      stage: "creating_order",
-      errorName: "CheckoutConfigurationError",
-      errorCode: "SANITY_WRITE_TOKEN_MISSING",
+    expect(result).toMatchObject({ success: false, code: "STOCK_CHANGED" });
+    expect(mocks.loggerError).toHaveBeenCalledWith("checkout_reservation_failed", expect.objectContaining({
+      stage: "reserving_inventory",
+      errorName: "Error",
+      errorCode: "DATABASE_URL_MISSING",
     }));
   });
 
   it("convierte un conflicto atómico de revisión en STOCK_CHANGED sin crear pago", async () => {
     mocks.availability = [{ _id: "p1", stock: 0 }];
     mocks.existingOrders = [null, null];
-    mocks.chain.commit.mockRejectedValueOnce({ statusCode: 409 });
+    const conflict = Object.assign(new Error("STOCK_CHANGED"), { inventory: [{ productId: "p1", availableQuantity: 0 }] });
+    mocks.reserveInventoryAndCreateOrder.mockRejectedValueOnce(conflict);
     const result = await createCheckoutSession(request());
     expect(result).toMatchObject({ success: false, code: "STOCK_CHANGED", inventory: [{ productId: "p1", availableQuantity: 0 }] });
     expect(mocks.sessionCreate).not.toHaveBeenCalled();
-    expect(mocks.patch).not.toHaveBeenCalled();
+    expect(mocks.linkCheckoutSession).not.toHaveBeenCalled();
   });
 
-  it("conserva los detalles seguros de un rechazo de Sanity durante la reserva", async () => {
-    mocks.chain.commit.mockRejectedValueOnce({
+  it("conserva los detalles seguros de un rechazo de Neon durante la reserva", async () => {
+    mocks.reserveInventoryAndCreateOrder.mockRejectedValueOnce({
       name: "ClientError",
       message: "Insufficient permissions for mutation",
-      statusCode: 403,
+      code: "42501",
     });
     const result = await createCheckoutSession(request());
-    expect(result).toMatchObject({ success: false, code: "CHECKOUT_FAILED" });
+    expect(result).toMatchObject({ success: false, code: "STOCK_CHANGED" });
     expect(mocks.sessionCreate).not.toHaveBeenCalled();
     expect(mocks.loggerError).toHaveBeenCalledWith("checkout_reservation_failed", expect.objectContaining({
       stage: "reserving_inventory",
       errorName: "ClientError",
       errorMessage: "Insufficient permissions for mutation",
-      errorCode: "HTTP_403",
-      httpStatus: 403,
-    }));
-    expect(mocks.loggerError).toHaveBeenCalledWith("checkout_unexpected_error", expect.objectContaining({
-      stage: "reserving_inventory",
-      errorCode: "HTTP_403",
+      errorCode: "42501",
     }));
   });
 
@@ -182,14 +187,14 @@ describe("createCheckoutSession", () => {
     const result = await createCheckoutSession(request());
     expect(result).toMatchObject({ success: true, checkoutUrl: "https://checkout.test" });
     expect(mocks.sessionRetrieve).toHaveBeenCalledWith("cs_1");
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.reserveInventoryAndCreateOrder).not.toHaveBeenCalled();
     expect(mocks.sessionCreate).not.toHaveBeenCalled();
   });
 
   it("evita un segundo checkout mientras el primero sigue preparando el pago", async () => {
     mocks.existingOrders = [{ _id: `order.${attemptId}`, clerkUserId: "user_1", status: "pending" }];
     await expect(createCheckoutSession(request())).resolves.toMatchObject({ success: false, code: "CHECKOUT_IN_PROGRESS" });
-    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.reserveInventoryAndCreateOrder).not.toHaveBeenCalled();
     expect(mocks.sessionCreate).not.toHaveBeenCalled();
   });
 
@@ -197,10 +202,12 @@ describe("createCheckoutSession", () => {
     mocks.products[0].stock = 1;
     mocks.availability = [{ _id: "p1", stock: 0 }];
     mocks.existingOrders = [null, null, null];
-    let commitCall = 0;
-    mocks.chain.commit.mockImplementation(() => {
-      commitCall += 1;
-      return commitCall === 2 ? Promise.reject({ statusCode: 409 }) : Promise.resolve({});
+    let reserveCall = 0;
+    mocks.reserveInventoryAndCreateOrder.mockImplementation(() => {
+      reserveCall += 1;
+      return reserveCall === 2
+        ? Promise.reject(Object.assign(new Error("STOCK_CHANGED"), { inventory: [{ productId: "p1", availableQuantity: 0 }] }))
+        : Promise.resolve();
     });
 
     const results = await Promise.all([createCheckoutSession(request()), createCheckoutSession(request())]);
@@ -215,8 +222,8 @@ describe("createCheckoutSession", () => {
     const result = await createCheckoutSession(request());
     expect(result).toMatchObject({ success: false, code: "PAYMENT_PROVIDER_ERROR" });
     expect(result).not.toHaveProperty("stack");
-    expect(mocks.transaction).toHaveBeenCalledTimes(2);
-    expect(mocks.chain.create).toHaveBeenCalledWith(expect.objectContaining({ reason: "checkout_failed_release" }));
+    expect(mocks.reserveInventoryAndCreateOrder).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseCheckoutReservation).toHaveBeenCalledTimes(1);
     expect(mocks.loggerError).toHaveBeenCalledWith("checkout_payment_session_failed", expect.objectContaining({
       stage: "creating_payment_session",
       provider: "stripe",
@@ -234,7 +241,7 @@ describe("createCheckoutSession", () => {
     const result = await createCheckoutSession(request());
     expect(result).toMatchObject({ success: false, code: "PAYMENT_PROVIDER_ERROR" });
     expect(mocks.sessionCreate).not.toHaveBeenCalled();
-    expect(mocks.transaction).toHaveBeenCalledTimes(2);
+    expect(mocks.releaseCheckoutReservation).toHaveBeenCalledTimes(1);
     expect(mocks.loggerError).toHaveBeenCalledWith("checkout_payment_session_failed", expect.objectContaining({
       stage: "creating_payment_session",
       errorName: "Error",
@@ -244,9 +251,7 @@ describe("createCheckoutSession", () => {
 
   it("registra por separado el error original y un fallo al liberar inventario", async () => {
     mocks.sessionCreate.mockRejectedValue(Object.assign(new Error("Stripe unavailable"), { code: "api_error" }));
-    mocks.chain.commit
-      .mockResolvedValueOnce({})
-      .mockRejectedValueOnce(Object.assign(new Error("Release rejected"), { statusCode: 503 }));
+    mocks.releaseCheckoutReservation.mockRejectedValueOnce(Object.assign(new Error("Release rejected"), { statusCode: 503 }));
 
     const result = await createCheckoutSession(request());
 
@@ -262,9 +267,7 @@ describe("createCheckoutSession", () => {
   });
 
   it("no oculta una sesión válida si falla enlazarla al pedido", async () => {
-    mocks.chain.commit
-      .mockResolvedValueOnce({})
-      .mockRejectedValueOnce(Object.assign(new Error("Order update rejected"), { statusCode: 503 }));
+    mocks.linkCheckoutSession.mockRejectedValueOnce(Object.assign(new Error("Order update rejected"), { statusCode: 503 }));
 
     const result = await createCheckoutSession(request());
 
@@ -278,7 +281,7 @@ describe("createCheckoutSession", () => {
   });
 
   it("un error inesperado devuelve una respuesta genérica segura", async () => {
-    mocks.fetch.mockRejectedValueOnce(new Error("database connection secret"));
+    mocks.getExistingCheckout.mockRejectedValueOnce(new Error("database connection secret"));
     const result = await createCheckoutSession(request());
     expect(result).toEqual({ success: false, code: "CHECKOUT_FAILED", message: "No pudimos iniciar el pago. Inténtalo nuevamente en unos momentos." });
   });

@@ -12,7 +12,16 @@ import {
   type InventoryAvailability,
 } from "@/lib/checkout";
 import { calculatePricing, centsToDollars, dollarsToCents, STORE_CURRENCY } from "@/lib/pricing";
-import { backendClient } from "@/sanity/lib/backendClient";
+import {
+  fetchProductsForCheckout,
+  getExistingCheckout,
+  linkCheckoutSession,
+  loadInventoryAvailability,
+  releaseCheckoutReservation,
+  reserveInventoryAndCreateOrder,
+  type CatalogProduct,
+  type ExistingCheckoutOrder,
+} from "@/lib/neon/commerce";
 
 const checkoutSchema = z.object({
   items: z.array(z.object({
@@ -25,32 +34,6 @@ const checkoutSchema = z.object({
 });
 
 export type CheckoutRequest = z.input<typeof checkoutSchema>;
-
-type CatalogProduct = {
-  _id: string;
-  _rev: string;
-  name?: string;
-  description?: string;
-  sku?: string;
-  variant?: string;
-  price?: number;
-  discount?: number;
-  stock?: number;
-  taxable?: boolean;
-  isActive?: boolean;
-};
-
-type ExistingCheckoutOrder = {
-  _id: string;
-  clerkUserId?: string;
-  status?: string;
-  stripeCheckoutSessionId?: string;
-};
-
-type ReleasableOrder = {
-  _rev: string;
-  inventoryReserved?: boolean;
-};
 
 export async function createCheckoutSession(input: CheckoutRequest): Promise<CheckoutResult> {
   const parsed = checkoutSchema.safeParse(input);
@@ -145,55 +128,46 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
       };
     });
 
-    assertSanityWriteTokenConfigured();
-    let reservation = backendClient.transaction().create({
-      _id: orderId,
-      _type: "order",
-      orderNumber: attemptId,
-      checkoutAttemptId: attemptId,
-      clerkUserId: userId,
-      customerName: user.fullName || user.firstName || "Cliente",
-      email,
-      stripeCustomerId: "pending",
-      stripePaymentIntentId: "pending",
-      products: orderProducts,
-      subtotalCents: pricing.subtotalCents,
-      discountCents: pricing.discountCents,
-      taxBaseCents: pricing.taxBaseCents,
-      itbmsCents: pricing.itbmsCents,
-      shippingCents: pricing.shippingCents,
-      totalCents: pricing.totalCents,
-      totalPrice: centsToDollars(pricing.totalCents),
-      amountDiscount: centsToDollars(pricing.discountCents),
-      currency: pricing.currency,
-      status: "pending",
-      inventoryReserved: true,
-      orderDate: now,
-    });
-
-    for (const product of products) {
-      const quantity = quantities.get(product._id)!;
-      reservation = reservation
-        .patch(product._id, (patch) => patch.ifRevisionId(product._rev).dec({ stock: quantity }))
-        .create({
-          _id: `inventory.${attemptId}.${safeId(product._id)}.reserve`,
-          _type: "inventoryMovement",
-          productId: product._id,
-          orderId,
-          quantity: -quantity,
-          reason: "checkout_reserved",
-          createdAt: now,
-        });
-    }
-
     stage = "reserving_inventory";
     logger.info("checkout_reservation_started", { orderId, userId, stage, productCount: products.length });
     try {
-      await reservation.commit();
+      await reserveInventoryAndCreateOrder({
+        id: orderId,
+        orderNumber: attemptId,
+        checkoutAttemptId: attemptId,
+        clerkUserId: userId,
+        customerName: user.fullName || user.firstName || "Cliente",
+        email,
+        subtotalCents: pricing.subtotalCents,
+        discountCents: pricing.discountCents,
+        taxBaseCents: pricing.taxBaseCents,
+        itbmsCents: pricing.itbmsCents,
+        shippingCents: pricing.shippingCents,
+        totalCents: pricing.totalCents,
+        totalPrice: centsToDollars(pricing.totalCents),
+        amountDiscount: centsToDollars(pricing.discountCents),
+        currency: pricing.currency,
+        orderDate: now,
+        items: orderProducts.map((item) => ({
+          id: item._key,
+          productId: item.productId,
+          quantity: item.quantity,
+          nameSnapshot: item.nameSnapshot,
+          skuSnapshot: item.skuSnapshot,
+          variantSnapshot: item.variantSnapshot,
+          unitPriceCents: item.unitPriceCents,
+          subtotalCents: item.subtotalCents,
+          discountCents: item.discountCents,
+          itbmsCents: item.itbmsCents,
+          totalCents: item.totalCents,
+        })),
+      });
     } catch (error: unknown) {
       const errorDetails = getSafeErrorDetails(error);
       logger.error("checkout_reservation_failed", { orderId, userId, stage, ...errorDetails });
-      if (!isSanityConflict(error)) throw error;
+      if (error instanceof Error && "inventory" in error) {
+        throw new StockChangedError((error as Error & { inventory: InventoryAvailability[] }).inventory);
+      }
       const concurrentOrder = await getExistingCheckout(orderId);
       if (concurrentOrder) return reuseExistingCheckout(concurrentOrder, userId);
       const inventory = await loadInventoryAvailability(productIds);
@@ -270,11 +244,11 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
       });
       stage = "updating_order";
       try {
-        await backendClient.patch(orderId).set({
-          stripeCheckoutSessionId: session.id,
-          stripeCustomerId: typeof session.customer === "string" ? session.customer : customerId ?? "guest",
-          status: "payment_pending",
-        }).commit();
+        await linkCheckoutSession({
+          orderId,
+          sessionId: session.id,
+          customerId: typeof session.customer === "string" ? session.customer : customerId ?? "guest",
+        });
         logger.info("checkout_order_updated", { orderId, userId, stage, provider: "stripe" });
       } catch (error: unknown) {
         logger.error("checkout_order_session_link_failed", {
@@ -300,7 +274,8 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
       });
       try {
         stage = "releasing_inventory";
-        await releaseReservation(orderId, attemptId, products, quantities);
+        await releaseCheckoutReservation(orderId, attemptId);
+        logger.info("inventory_reservation_released", { orderId, userId, stage });
       } catch (releaseError: unknown) {
         logger.error("inventory_reservation_release_failed", {
           orderId,
@@ -331,13 +306,6 @@ export async function createCheckoutSession(input: CheckoutRequest): Promise<Che
   }
 }
 
-async function getExistingCheckout(orderId: string): Promise<ExistingCheckoutOrder | null> {
-  return backendClient.fetch(
-    `*[_type == "order" && _id == $orderId][0]{_id,clerkUserId,status,stripeCheckoutSessionId}`,
-    { orderId }
-  );
-}
-
 async function reuseExistingCheckout(order: ExistingCheckoutOrder, userId: string): Promise<CheckoutResult> {
   if (order.clerkUserId !== userId) return failure("CHECKOUT_FAILED", "No pudimos iniciar el pago.");
   if (order.status === "payment_pending" && order.stripeCheckoutSessionId) {
@@ -357,60 +325,7 @@ async function reuseExistingCheckout(order: ExistingCheckoutOrder, userId: strin
 }
 
 async function fetchProducts(productIds: string[]): Promise<CatalogProduct[]> {
-  return backendClient.fetch(
-    `*[_type == "product" && _id in $ids]{_id,_rev,name,description,sku,variant,price,discount,stock,taxable,isActive}`,
-    { ids: productIds }
-  );
-}
-
-async function loadInventoryAvailability(productIds: string[]): Promise<InventoryAvailability[]> {
-  const products = await backendClient.fetch<Array<{ _id: string; stock?: number }>>(
-    `*[_type == "product" && _id in $ids]{_id,stock}`,
-    { ids: productIds }
-  );
-  const byId = new Map(products.map((product) => [product._id, product.stock]));
-  return productIds.map((productId) => ({
-    productId,
-    availableQuantity: Number.isSafeInteger(byId.get(productId)) ? Math.max(0, byId.get(productId) ?? 0) : 0,
-  }));
-}
-
-async function releaseReservation(orderId: string, attemptId: string, products: CatalogProduct[], quantities: Map<string, number>) {
-  const order = await backendClient.fetch<ReleasableOrder | null>(
-    `*[_type == "order" && _id == $orderId][0]{_rev,inventoryReserved}`,
-    { orderId }
-  );
-  if (!order?.inventoryReserved) return;
-
-  const now = new Date().toISOString();
-  let transaction = backendClient.transaction().patch(orderId, (patch) => patch.ifRevisionId(order._rev).set({
-    status: "payment_failed",
-    inventoryReserved: false,
-  }));
-  for (const product of products) {
-    const quantity = quantities.get(product._id)!;
-    transaction = transaction
-      .patch(product._id, (patch) => patch.inc({ stock: quantity }))
-      .create({
-        _id: `inventory.${attemptId}.${safeId(product._id)}.release`,
-        _type: "inventoryMovement",
-        productId: product._id,
-        orderId,
-        quantity,
-        reason: "checkout_failed_release",
-        createdAt: now,
-      });
-  }
-  try {
-    await transaction.commit();
-    logger.info("inventory_reservation_released", { orderId, productCount: products.length });
-  } catch (error) {
-    const latest = await backendClient.fetch<ReleasableOrder | null>(
-      `*[_type == "order" && _id == $orderId][0]{_rev,inventoryReserved}`,
-      { orderId }
-    );
-    if (latest?.inventoryReserved) throw error;
-  }
+  return fetchProductsForCheckout(productIds);
 }
 
 function logReservationFailure(orderId: string, userId: string, quantities: Map<string, number>, inventory: InventoryAvailability[]) {
@@ -437,14 +352,6 @@ function failure(code: "EMPTY_CART" | "INVALID_CART" | "UNAUTHORIZED" | "CHECKOU
   return { success: false, code, message };
 }
 
-function isSanityConflict(error: unknown): boolean {
-  return Boolean(error && typeof error === "object" && "statusCode" in error && (error as { statusCode?: number }).statusCode === 409);
-}
-
-function safeId(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_-]/g, "_");
-}
-
 function normalizeOptionalText(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized ? normalized : undefined;
@@ -454,14 +361,6 @@ function parseShippingCents(): number {
   const value = Number(process.env.NEXT_PUBLIC_STANDARD_SHIPPING_CENTS ?? "0");
   if (!Number.isSafeInteger(value) || value < 0) throw new Error("STANDARD_SHIPPING_CENTS no es válido");
   return value;
-}
-
-function assertSanityWriteTokenConfigured(): void {
-  if (process.env.SANITY_API_TOKEN) return;
-  const error = new Error("SANITY_API_TOKEN no está configurado para operaciones de escritura") as Error & { code: string };
-  error.name = "CheckoutConfigurationError";
-  error.code = "SANITY_WRITE_TOKEN_MISSING";
-  throw error;
 }
 
 function getBaseUrl(): string {

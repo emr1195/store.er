@@ -3,17 +3,8 @@ import { Check, Clock, Home, Package } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import ClearCartOnSuccess from "@/components/ClearCartOnSuccess";
+import { getSuccessOrder } from "@/lib/neon/commerce";
 import stripe from "@/lib/stripe";
-import { backendClient } from "@/sanity/lib/backendClient";
-
-type SuccessOrder = {
-  _id: string;
-  orderNumber?: string;
-  status?: string;
-  totalCents?: number;
-  currency?: string;
-  products?: Array<{ productId?: string; quantity?: number }>;
-} | null;
 
 export default async function SuccessPage({
   searchParams,
@@ -27,15 +18,7 @@ export default async function SuccessPage({
 
   const session = await stripe.checkout.sessions.retrieve(sessionId).catch(() => null);
   const referencedOrderId = session?.metadata?.orderId || session?.client_reference_id;
-  const order = referencedOrderId
-    ? await backendClient.fetch<SuccessOrder>(
-        `*[_type == "order" && _id == $orderId && clerkUserId == $userId][0]{_id,orderNumber,status,totalCents,currency,products[]{productId,quantity}}`,
-        { orderId: referencedOrderId, userId }
-      )
-    : await backendClient.fetch<SuccessOrder>(
-        `*[_type == "order" && stripeCheckoutSessionId == $sessionId && clerkUserId == $userId][0]{_id,orderNumber,status,totalCents,currency,products[]{productId,quantity}}`,
-        { sessionId, userId }
-      );
+  const order = await getSuccessOrder({ orderId: referencedOrderId ?? undefined, sessionId, userId });
   if (!order) redirect("/orders?payment=not-found");
 
   const paidInOrder = ["paid", "processing", "shipped", "delivered"].includes(order.status ?? "");

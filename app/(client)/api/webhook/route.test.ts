@@ -8,9 +8,12 @@ const mocks = vi.hoisted(() => {
   }
   return {
     constructEvent: vi.fn(),
-    fetch: vi.fn(),
-    create: vi.fn(),
-    transaction: vi.fn(() => chain),
+    isWebhookProcessed: vi.fn(),
+    recordWebhookEvent: vi.fn(),
+    confirmOrderPayment: vi.fn(),
+    failOrderAmountMismatch: vi.fn(),
+    getOrderByPaymentIntent: vi.fn(),
+    recordRefund: vi.fn(),
     chain,
     getOrderForMutation: vi.fn(),
     cancelOrderWithInventory: vi.fn(),
@@ -22,14 +25,19 @@ vi.mock("@/lib/stripe", () => ({ default: {
   webhooks: { constructEvent: mocks.constructEvent },
   invoices: { retrieve: vi.fn() },
 } }));
-vi.mock("@/sanity/lib/backendClient", () => ({ backendClient: {
-  fetch: mocks.fetch,
-  create: mocks.create,
-  transaction: mocks.transaction,
-} }));
 vi.mock("@/lib/orderService", async (importOriginal) => {
   const original = await importOriginal<typeof import("@/lib/orderService")>();
-  return { ...original, getOrderForMutation: mocks.getOrderForMutation, cancelOrderWithInventory: mocks.cancelOrderWithInventory };
+  return {
+    ...original,
+    getOrderForMutation: mocks.getOrderForMutation,
+    cancelOrderWithInventory: mocks.cancelOrderWithInventory,
+    isWebhookProcessed: mocks.isWebhookProcessed,
+    recordWebhookEvent: mocks.recordWebhookEvent,
+    confirmOrderPayment: mocks.confirmOrderPayment,
+    failOrderAmountMismatch: mocks.failOrderAmountMismatch,
+    getOrderByPaymentIntent: mocks.getOrderByPaymentIntent,
+    recordRefund: mocks.recordRefund,
+  };
 });
 vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
@@ -46,24 +54,24 @@ describe("Stripe webhook", () => {
   it("rechaza una firma inválida", async () => {
     mocks.constructEvent.mockImplementation(() => { throw new Error("bad signature"); });
     expect((await POST(request())).status).toBe(400);
-    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.recordWebhookEvent).not.toHaveBeenCalled();
   });
 
   it("reconoce un evento ya procesado sin repetir operaciones", async () => {
     mocks.constructEvent.mockReturnValue({ id: "evt_1", type: "customer.created", data: { object: {} } });
-    mocks.fetch.mockResolvedValue("stripeEvent.evt_1");
+    mocks.isWebhookProcessed.mockResolvedValue(true);
     const response = await POST(request());
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ duplicate: true });
-    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.recordWebhookEvent).not.toHaveBeenCalled();
   });
 
   it("registra una sola vez un evento válido", async () => {
     mocks.constructEvent.mockReturnValue({ id: "evt_2", type: "customer.created", data: { object: {} } });
-    mocks.fetch.mockResolvedValue(null);
-    mocks.create.mockResolvedValue({});
+    mocks.isWebhookProcessed.mockResolvedValue(false);
+    mocks.recordWebhookEvent.mockResolvedValue(undefined);
     expect((await POST(request())).status).toBe(200);
-    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ _id: "stripeEvent.evt_2", eventId: "evt_2" }));
+    expect(mocks.recordWebhookEvent).toHaveBeenCalledWith(expect.objectContaining({ id: "evt_2" }));
   });
 
   it("un checkout vencido libera la reserva mediante la operación idempotente", async () => {
@@ -72,7 +80,7 @@ describe("Stripe webhook", () => {
       type: "checkout.session.expired",
       data: { object: { id: "cs_expired", metadata: { orderId: "order.1" } } },
     });
-    mocks.fetch.mockResolvedValue(null);
+    mocks.isWebhookProcessed.mockResolvedValue(false);
     mocks.getOrderForMutation.mockResolvedValue({
       _id: "order.1",
       _rev: "r1",
