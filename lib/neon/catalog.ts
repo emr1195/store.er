@@ -26,8 +26,13 @@ const productProjection = `
   ), '[]'::jsonb) as categories
 `;
 
+const storefrontProductOrder = `
+  case when p.slug = 'sueter-exploradores-del-rey' then 0 else 1 end,
+  p.name asc
+`;
+
 export async function getAllProducts(): Promise<Product[]> {
-  const rows = await getSql().query(`select ${productProjection} from products p order by p.name asc`);
+  const rows = await getSql().query(`select ${productProjection} from products p order by ${storefrontProductOrder}`);
   return rows as unknown as Product[];
 }
 
@@ -44,7 +49,7 @@ export async function getAllCategories(quantity?: number): Promise<Category[]> {
 
 export async function searchProductsByName(searchParam: string): Promise<Product[]> {
   const rows = await getSql().query(
-    `select ${productProjection} from products p where p.name ilike $1 order by p.name asc`,
+    `select ${productProjection} from products p where p.name ilike $1 order by ${storefrontProductOrder}`,
     [`%${searchParam}%`],
   );
   return rows as unknown as Product[];
@@ -77,7 +82,7 @@ export async function getRelatedProducts(product: Product): Promise<Product[]> {
         where candidate.product_id = p.id and current.product_id = $1
       ) or (not exists (select 1 from product_categories where product_id = $1) and p.variant = $2)
     )
-    order by p.name asc limit 4
+    order by ${storefrontProductOrder} limit 4
   `, [product._id, product.variant ?? ""]);
   return rows as unknown as Product[];
 }
@@ -87,7 +92,7 @@ export async function getProductsByCategory(categorySlug: string): Promise<Produ
     select ${productProjection}
     from products p join product_categories pc_filter on pc_filter.product_id = p.id
     join categories c_filter on c_filter.id = pc_filter.category_id
-    where c_filter.slug = $1 order by p.name asc
+    where c_filter.slug = $1 order by ${storefrontProductOrder}
   `, [categorySlug]);
   return rows as unknown as Product[];
 }
@@ -103,7 +108,7 @@ export async function getCatalogProducts(filters: { variant?: string; category?:
   if (filters.search) { params.push(`%${filters.search}%`); conditions.push(`p.name ilike $${params.length}`); }
   const rows = await getSql().query(`
     select ${productProjection} from products p
-    where ${conditions.join(" and ")} order by p.name asc limit 100
+    where ${conditions.join(" and ")} order by ${storefrontProductOrder} limit 100
   `, params);
   return rows as unknown as Product[];
 }
