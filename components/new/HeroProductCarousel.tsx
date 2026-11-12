@@ -38,10 +38,10 @@ export default function HeroProductCarousel({ products }: { products: HeroProduc
 
   return (
     <div className="relative mx-auto hidden h-[390px] w-full max-w-[520px] lg:block" role="group" aria-label="Productos disponibles en la tienda">
-      <Link href={primaryProduct.href} aria-label={`Ver ${primaryProduct.name}`} className="absolute left-0 top-12 h-[78%] w-[62%] rotate-[-4deg] overflow-hidden rounded-3xl border border-white/15 bg-white/95 p-4 shadow-2xl motion-safe:transition-transform motion-safe:hover:-rotate-2">
+      <Link href={primaryProduct.href} aria-label={`Ver ${primaryProduct.name}`} className="absolute left-0 top-12 h-[78%] w-[62%] rotate-[-4deg] overflow-hidden rounded-3xl bg-white/95 p-4 shadow-2xl motion-safe:transition-transform motion-safe:hover:-rotate-2">
         <ProductImage key={primaryProduct.id} src={primaryProduct.image} alt={primaryProduct.name} sizes="300px" className="h-full w-full bg-transparent" imageClassName="object-contain p-4" priority />
       </Link>
-      <Link href={secondaryProduct.href} aria-label={`Ver ${secondaryProduct.name}`} className="absolute bottom-2 right-0 h-[72%] w-[58%] rotate-[5deg] overflow-hidden rounded-3xl border border-white/15 bg-[#edf1ff] p-4 shadow-2xl motion-safe:transition-transform motion-safe:hover:rotate-2">
+      <Link href={secondaryProduct.href} aria-label={`Ver ${secondaryProduct.name}`} className="absolute bottom-2 right-0 h-[72%] w-[58%] rotate-[5deg] overflow-hidden rounded-3xl bg-[#edf1ff] p-4 shadow-2xl motion-safe:transition-transform motion-safe:hover:rotate-2">
         <ProductImage key={secondaryProduct.id} src={secondaryProduct.image} alt={secondaryProduct.name} sizes="280px" className="h-full w-full bg-transparent" imageClassName="object-contain p-5" priority />
       </Link>
       <div className="absolute right-2 top-3 flex items-center gap-2">
