@@ -10,6 +10,7 @@ interface ProductImageProps {
   sizes: string;
   className?: string;
   imageClassName?: string;
+  priority?: boolean;
 }
 
 export default function ProductImage({
@@ -18,6 +19,7 @@ export default function ProductImage({
   sizes,
   className,
   imageClassName,
+  priority = false,
 }: ProductImageProps) {
   const [currentSrc, setCurrentSrc] = useState(src);
   const [loaded, setLoaded] = useState(false);
@@ -38,13 +40,14 @@ export default function ProductImage({
       {isExternalNonSanityImage(currentSrc) ? (
         // Direct rendering avoids proxying arbitrary administrator-provided hosts through the image optimizer.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={currentSrc} alt={alt} onLoad={() => setLoaded(true)} onError={() => setCurrentSrc("/product-placeholder.svg")} className={cn("absolute inset-0 h-full w-full transition-opacity duration-300 motion-reduce:transition-none", loaded ? "opacity-100" : "opacity-0", imageClassName)} />
+        <img src={currentSrc} alt={alt} loading={priority ? "eager" : "lazy"} onLoad={() => setLoaded(true)} onError={() => setCurrentSrc("/product-placeholder.svg")} className={cn("absolute inset-0 h-full w-full transition-opacity duration-300 motion-reduce:transition-none", loaded ? "opacity-100" : "opacity-0", imageClassName)} />
       ) : (
         <Image
           src={currentSrc}
           alt={alt}
           fill
           sizes={sizes}
+          priority={priority}
           onLoad={() => setLoaded(true)}
           onError={() => {
             if (currentSrc !== "/product-placeholder.svg") {

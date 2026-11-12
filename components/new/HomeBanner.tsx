@@ -1,10 +1,15 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowDown, ArrowRight, BadgeCheck } from "lucide-react";
 import jacketImage from "@/images/products/uploaded/jacket.png";
 import tshirtImage from "@/images/products/uploaded/tshirt_new.png";
+import { getCatalogProducts } from "@/lib/neon/catalog";
+import { getProductImageUrl } from "@/lib/productImages";
+import HeroProductCarousel, { type HeroProductSlide } from "./HeroProductCarousel";
 
-const HomeBanner = () => (
+const HomeBanner = async () => {
+  const products = await loadHeroProducts();
+
+  return (
   <section aria-labelledby="hero-title" className="relative overflow-hidden bg-page-bg text-brand-navy lg:bg-brand-navy lg:text-white">
     <div aria-hidden="true" className="h-9 bg-brand-navy lg:absolute lg:inset-0 lg:h-auto lg:opacity-30 lg:[background-image:radial-gradient(circle_at_20%_20%,#2457f5_0,transparent_35%),radial-gradient(circle_at_90%_80%,#ffd23f_0,transparent_22%)]" />
     <div className="relative mx-auto grid max-w-screen-xl items-center gap-10 px-5 pb-7 pt-8 sm:px-6 sm:py-12 lg:grid-cols-[1.08fr_.92fr] lg:px-8 lg:py-20">
@@ -28,17 +33,31 @@ const HomeBanner = () => (
         </div>
       </div>
 
-      <div className="relative mx-auto hidden h-[390px] w-full max-w-[520px] lg:block" aria-label="Selección de ropa disponible en la tienda">
-        <div className="absolute left-0 top-12 h-[78%] w-[62%] rotate-[-4deg] overflow-hidden rounded-3xl border border-white/15 bg-white/95 p-4 shadow-2xl motion-safe:transition-transform motion-safe:hover:-rotate-2">
-          <Image src={jacketImage} alt="Chaqueta negra, ejemplo de producto de la tienda" fill sizes="(max-width: 640px) 55vw, 300px" className="object-contain p-4" priority />
-        </div>
-        <div className="absolute bottom-2 right-0 h-[72%] w-[58%] rotate-[5deg] overflow-hidden rounded-3xl border border-white/15 bg-[#edf1ff] p-4 shadow-2xl motion-safe:transition-transform motion-safe:hover:rotate-2">
-          <Image src={tshirtImage} alt="Camisetas negras, ejemplo de producto de la tienda" fill sizes="(max-width: 640px) 52vw, 280px" className="object-contain p-5" priority />
-        </div>
-        <div className="absolute right-2 top-3 rounded-2xl bg-brand-yellow px-4 py-3 font-black text-brand-navy shadow-xl">Productos oficiales</div>
-      </div>
+      <HeroProductCarousel products={products} />
     </div>
   </section>
-);
+  );
+};
+
+async function loadHeroProducts(): Promise<HeroProductSlide[]> {
+  try {
+    const products = await getCatalogProducts({});
+    const slides = products.flatMap((product) => {
+      const slug = product.slug?.current;
+      const name = product.name?.trim();
+      const image = getProductImageUrl(product, 900);
+      if (!slug || !name || image === "/product-placeholder.svg") return [];
+      return [{ id: product._id, name, image, href: `/product/${encodeURIComponent(slug)}` }];
+    });
+    if (slides.length >= 2) return slides.slice(0, 12);
+  } catch (error) {
+    console.error("No se pudieron cargar los productos del hero", error instanceof Error ? error.message : "Error desconocido");
+  }
+
+  return [
+    { id: "fallback-jacket", name: "Chaqueta oficial", image: jacketImage.src, href: "/shop" },
+    { id: "fallback-tshirt", name: "Camiseta oficial", image: tshirtImage.src, href: "/shop" },
+  ];
+}
 
 export default HomeBanner;
